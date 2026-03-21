@@ -138,10 +138,33 @@ public class DebugDisplay : MonoBehaviour
                 speedLevel = hexa.speedLevel;
                 planeNames = Hexadecachoron.planeNames;
             }
+            var lorenz = activeShape.GetComponent<LorenzAttractor>();
+            if (lorenz != null)
+            {
+                shapeName = "LorenzAttractor";
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
-        sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+
+        // Lorenz-specific debug info
+        if (activeShape != null)
+        {
+            var lorenz = activeShape.GetComponent<LorenzAttractor>();
+            if (lorenz != null)
+            {
+                sb.AppendLine($"Shape: {shapeName}  dt:{lorenz.dt:F3}");
+                sb.AppendLine($"\u03c3:{lorenz.sigma:F1}  \u03c1:{lorenz.rho:F1}  \u03b2:{lorenz.beta:F2}");
+            }
+            else
+            {
+                sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+            }
+        }
+        else
+        {
+            sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+        }
 
         if (angles != null && planeNames != null)
         {

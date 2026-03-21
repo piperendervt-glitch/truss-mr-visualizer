@@ -23,7 +23,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "LorenzAttractor" };
 
     // Grid
     GameObject gridRoot;
@@ -118,7 +118,15 @@ public class ShapeManager : MonoBehaviour
 
         if (bShort) SwitchToNext();
         if (aLong) CycleBgMode();
-        if (aShort && rotationSnapshot != null) rotationSnapshot.SaveToCurrentSlot();
+        if (aShort)
+        {
+            var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
+            var lorenz = activeShape != null ? activeShape.GetComponent<LorenzAttractor>() : null;
+            if (lorenz != null)
+                lorenz.ResetTrail();
+            else if (rotationSnapshot != null)
+                rotationSnapshot.SaveToCurrentSlot();
+        }
         if (bLong && rotationSnapshot != null) rotationSnapshot.CycleSlotAndRestore();
 
         // Update label every frame (pair info changes on stick click)
@@ -271,6 +279,9 @@ public class ShapeManager : MonoBehaviour
         var hexa = shapes[currentIndex].GetComponent<Hexadecachoron>();
         if (hexa != null) return Hexadecachoron.speedNames[hexa.speedLevel];
 
+        var lorenz = shapes[currentIndex].GetComponent<LorenzAttractor>();
+        if (lorenz != null) return $"dt:{lorenz.dt:F3}";
+
         return "Normal";
     }
 
@@ -284,6 +295,9 @@ public class ShapeManager : MonoBehaviour
 
         var hexa = shapes[currentIndex].GetComponent<Hexadecachoron>();
         if (hexa != null) return hexa.GetPairLabel();
+
+        var lorenz = shapes[currentIndex].GetComponent<LorenzAttractor>();
+        if (lorenz != null) return lorenz.GetParamLabel();
 
         return "";
     }
