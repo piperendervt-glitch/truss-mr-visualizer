@@ -31,7 +31,7 @@ public class ThomasAttractor : MonoBehaviour
 
     // Lyapunov exponent (simplified Wolf method)
     float refX, refY, refZ;
-    const float lyapD0 = 1e-8f;
+    const float lyapD0 = 1e-4f; // must be > float epsilon * attractor_scale
     float lyapSum;
     int lyapFrames;
     public float lyapunovExponent;
@@ -203,6 +203,9 @@ public class ThomasAttractor : MonoBehaviour
         if (lyapFrames >= lyapAvgFrames)
         {
             lyapunovExponent = lyapSum / (lyapFrames * stepsPerFrame * dt);
+#if UNITY_EDITOR
+            Debug.Log($"[Thomas] d1={d1:E3} lyapSum={lyapSum:F4} λ={lyapunovExponent:F4}");
+#endif
             lyapSum = 0f; lyapFrames = 0;
         }
 
@@ -276,11 +279,13 @@ public class ThomasAttractor : MonoBehaviour
                 }
             }
 
-            // Color by per-particle Lyapunov: blue(stable) → red(chaotic)
+            // Color by per-particle Lyapunov: blue(stable) → red(chaotic), dynamic range
             Color col;
             if (particleLyap != null)
             {
-                float h = Mathf.Lerp(0.66f, 0f, Mathf.Clamp01(particleLyap[i] / 0.5f));
+                float lambdaRange = Mathf.Max(0.01f, lyapMax - lyapMin);
+                float t = Mathf.Clamp01((particleLyap[i] - lyapMin) / lambdaRange);
+                float h = Mathf.Lerp(0.66f, 0f, t);
                 col = Color.HSVToRGB(h, 1f, 1f);
             }
             else
