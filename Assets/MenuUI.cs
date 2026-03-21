@@ -227,6 +227,8 @@ public class MenuUI : MonoBehaviour
         int tLen = 0;
         bool multi = false;
         string speedStr = "---";
+        float lyapVal = 0f;
+        bool hasLyap = false;
 
         if (shape != null)
         {
@@ -236,14 +238,20 @@ public class MenuUI : MonoBehaviour
             var hexa = shape.GetComponent<Hexadecachoron>();
             var dodeca = shape.GetComponent<Dodecaplex>();
 
-            if (lorenz != null) { pCount = lorenz.particleCount; tLen = lorenz.trailLength; multi = lorenz.multiMode; }
-            if (thomas != null) { pCount = thomas.particleCount; tLen = thomas.trailLength; multi = thomas.multiMode; }
+            if (lorenz != null) { pCount = lorenz.particleCount; tLen = lorenz.trailLength; multi = lorenz.multiMode; lyapVal = lorenz.lyapunovExponent; hasLyap = true; }
+            if (thomas != null) { pCount = thomas.particleCount; tLen = thomas.trailLength; multi = thomas.multiMode; lyapVal = thomas.lyapunovExponent; hasLyap = true; }
             if (tess != null) speedStr = Tesseract.speedNames[tess.speedLevel];
             if (hexa != null) speedStr = Hexadecachoron.speedNames[hexa.speedLevel];
             if (dodeca != null) speedStr = Dodecaplex.speedNames[dodeca.speedLevel];
         }
 
-        sb.AppendLine($"<size=24>FPS: {currentFps:F0}   Particles: {(multi ? pCount : 0)}</size>");
+        string lyapStr = "";
+        if (hasLyap)
+        {
+            string lc = lyapVal > 0.01f ? "red" : lyapVal < -0.01f ? "green" : "yellow";
+            lyapStr = $"  <color={lc}>\u03bb:{(lyapVal >= 0 ? "+" : "")}{lyapVal:F3}</color>";
+        }
+        sb.AppendLine($"<size=24>FPS: {currentFps:F0}   Particles: {(multi ? pCount : 0)}{lyapStr}</size>");
         sb.AppendLine("<color=#555555>\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</color>");
 
         string[] labels = {

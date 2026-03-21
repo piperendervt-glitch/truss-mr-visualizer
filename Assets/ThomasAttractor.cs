@@ -29,6 +29,14 @@ public class ThomasAttractor : MonoBehaviour
     LineRenderer lr;
     bool placedOnStart;
 
+    // Lyapunov exponent (simplified Wolf method)
+    float refX, refY, refZ;
+    const float lyapD0 = 1e-8f;
+    float lyapSum;
+    int lyapFrames;
+    public float lyapunovExponent;
+    const int lyapAvgFrames = 100;
+
     // Multi-particle mode
     public int particleCount = 200;
     public int trailLength = 100;
@@ -73,6 +81,8 @@ public class ThomasAttractor : MonoBehaviour
     public void ResetTrail()
     {
         tx = 0.1f; ty = 0f; tz = 0f;
+        refX = tx + lyapD0; refY = ty; refZ = tz;
+        lyapSum = 0f; lyapFrames = 0; lyapunovExponent = 0f;
         head = 0; count = 0;
         if (lr != null) lr.positionCount = 0;
 
@@ -150,6 +160,29 @@ public class ThomasAttractor : MonoBehaviour
             if (count < maxPoints) count++;
         }
 
+        // Lyapunov: evolve reference particle
+        for (int step = 0; step < stepsPerFrame; step++)
+        {
+            float rdx = Mathf.Sin(refY) - b * refX;
+            float rdy = Mathf.Sin(refZ) - b * refY;
+            float rdz = Mathf.Sin(refX) - b * refZ;
+            refX += rdx * dt; refY += rdy * dt; refZ += rdz * dt;
+        }
+        float sepX = refX - tx, sepY = refY - ty, sepZ = refZ - tz;
+        float d1 = Mathf.Sqrt(sepX * sepX + sepY * sepY + sepZ * sepZ);
+        if (d1 > 0f)
+        {
+            lyapSum += Mathf.Log(d1 / lyapD0);
+            lyapFrames++;
+            float s = lyapD0 / d1;
+            refX = tx + sepX * s; refY = ty + sepY * s; refZ = tz + sepZ * s;
+        }
+        if (lyapFrames >= lyapAvgFrames)
+        {
+            lyapunovExponent = lyapSum / (lyapFrames * stepsPerFrame * dt);
+            lyapSum = 0f; lyapFrames = 0;
+        }
+
         UpdateLineRenderer();
 
         // Multi-particle update
@@ -198,6 +231,7 @@ public class ThomasAttractor : MonoBehaviour
 
             // Particle trail
             var tlr = particleTrails[i];
+            tlr.enabled = trailLength > 0;
             if (trailLength > 0)
             {
                 var pts = pTrailPts[i];
@@ -214,15 +248,14 @@ public class ThomasAttractor : MonoBehaviour
                     pos[j] = pts[(st + j) % trailLength];
                 tlr.SetPositions(pos);
             }
-            else
-            {
-                tlr.positionCount = 0;
-            }
         }
     }
 
     void UpdateLineRenderer()
     {
+        lr.enabled = trailLength > 0;
+        if (!lr.enabled) return;
+
         lr.positionCount = count;
 
         int start = count < maxPoints ? 0 : head;
@@ -337,6 +370,7 @@ public class ThomasAttractor : MonoBehaviour
     public void SetTrailLength(int len)
     {
         trailLength = len;
+        if (lr != null) lr.enabled = len > 0;
         if (multiMode) { DestroyMultiParticles(); InitMultiParticles(); }
     }
 

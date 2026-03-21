@@ -42,6 +42,7 @@ public class DebugDisplay : MonoBehaviour
         debugTMP = textGo.AddComponent<TextMeshProUGUI>();
         debugTMP.fontSize = 24;
         debugTMP.color = Color.white;
+        debugTMP.richText = true;
 
         RectTransform rt = textGo.GetComponent<RectTransform>();
         rt.anchorMin = Vector2.zero;
@@ -169,11 +170,17 @@ public class DebugDisplay : MonoBehaviour
             {
                 sb.AppendLine($"Shape: {shapeName}  dt:{lorenz.dt:F3}");
                 sb.AppendLine($"\u03c3:{lorenz.sigma:F1}  \u03c1:{lorenz.rho:F1}  \u03b2:{lorenz.beta:F2}");
+                float lv = lorenz.lyapunovExponent;
+                string lc = lv > 0.01f ? "red" : lv < -0.01f ? "green" : "yellow";
+                sb.AppendLine($"Lyapunov: <color={lc}>{(lv >= 0 ? "+" : "")}{lv:F3}</color>");
             }
             else if (thomasDbg != null)
             {
                 sb.AppendLine($"Shape: {shapeName}  dt:{thomasDbg.dt:F3}");
                 sb.AppendLine($"b:{thomasDbg.b:F3}");
+                float lv = thomasDbg.lyapunovExponent;
+                string lc = lv > 0.01f ? "red" : lv < -0.01f ? "green" : "yellow";
+                sb.AppendLine($"Lyapunov: <color={lc}>{(lv >= 0 ? "+" : "")}{lv:F3}</color>");
             }
             else
             {
