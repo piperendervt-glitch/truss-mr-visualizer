@@ -13,8 +13,12 @@ public class ShapeManager : MonoBehaviour
     public RotationSnapshot rotationSnapshot;
     int currentIndex;
     TextMeshPro label;
-    bool prevButton;
-    bool prevAButton;
+
+    // A/B button long-press tracking
+    float aHoldTime, bHoldTime;
+    bool aWasPressed, bWasPressed;
+    bool aLongFired, bLongFired;
+    const float longPressTime = 1.0f;
 
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
@@ -36,7 +40,7 @@ public class ShapeManager : MonoBehaviour
         label.fontSize = 0.22f;
         label.alignment = TextAlignmentOptions.Center;
         label.color = new Color(1f, 0.9f, 0f, 1f);
-        label.rectTransform.sizeDelta = new Vector2(2.8f, 0.8f);
+        label.rectTransform.sizeDelta = new Vector2(2.8f, 1.2f);
 
         // Activate first shape, deactivate others
         for (int i = 0; i < shapes.Length; i++)
@@ -50,41 +54,72 @@ public class ShapeManager : MonoBehaviour
 
     void Update()
     {
-        bool buttonDown = false;
-        bool aButtonDown = false;
+        bool aShort = false, aLong = false;
+        bool bShort = false, bLong = false;
+        bool aPressed = false, bPressed = false;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
         if (kb != null)
         {
-            if (kb.spaceKey.wasPressedThisFrame) buttonDown = true;
-            if (kb.tabKey.wasPressedThisFrame) aButtonDown = true;
+            // Editor shortcuts: Space=shape, Tab=bg, Z=save, X=slot
+            if (kb.spaceKey.wasPressedThisFrame) bShort = true;
+            if (kb.tabKey.wasPressedThisFrame) aLong = true;
+            if (kb.zKey.wasPressedThisFrame) aShort = true;
+            if (kb.xKey.wasPressedThisFrame) bLong = true;
         }
 #else
-        // Quest 3: B button = shape switch, A button = background mode
         var rightCtrl = XRController.rightHand;
         if (rightCtrl != null)
         {
-            var bBtn = rightCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
-            if (bBtn != null)
-            {
-                bool pressed = bBtn.isPressed;
-                if (pressed && !prevButton) buttonDown = true;
-                prevButton = pressed;
-            }
-
             var aBtn = rightCtrl.TryGetChildControl<ButtonControl>("primaryButton");
-            if (aBtn != null)
+            if (aBtn != null) aPressed = aBtn.isPressed;
+
+            var bBtn = rightCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
+            if (bBtn != null) bPressed = bBtn.isPressed;
+        }
+
+        // A button: short=save snapshot, long=cycle bg mode
+        if (aPressed)
+        {
+            aHoldTime += Time.deltaTime;
+            if (aHoldTime >= longPressTime && !aLongFired)
             {
-                bool pressed = aBtn.isPressed;
-                if (pressed && !prevAButton) aButtonDown = true;
-                prevAButton = pressed;
+                aLong = true;
+                aLongFired = true;
             }
         }
+        else
+        {
+            if (aWasPressed && !aLongFired) aShort = true;
+            aHoldTime = 0f;
+            aLongFired = false;
+        }
+        aWasPressed = aPressed;
+
+        // B button: short=shape switch, long=slot cycle+restore
+        if (bPressed)
+        {
+            bHoldTime += Time.deltaTime;
+            if (bHoldTime >= longPressTime && !bLongFired)
+            {
+                bLong = true;
+                bLongFired = true;
+            }
+        }
+        else
+        {
+            if (bWasPressed && !bLongFired) bShort = true;
+            bHoldTime = 0f;
+            bLongFired = false;
+        }
+        bWasPressed = bPressed;
 #endif
 
-        if (buttonDown) SwitchToNext();
-        if (aButtonDown) CycleBgMode();
+        if (bShort) SwitchToNext();
+        if (aLong) CycleBgMode();
+        if (aShort && rotationSnapshot != null) rotationSnapshot.SaveToCurrentSlot();
+        if (bLong && rotationSnapshot != null) rotationSnapshot.CycleSlotAndRestore();
 
         // Update label every frame (pair info changes on stick click)
         UpdateLabel();
@@ -221,7 +256,8 @@ public class ShapeManager : MonoBehaviour
         string axisInfo = axisDisplay != null ? axisDisplay.GetSelectedAxisName() : "";
         string line2 = string.IsNullOrEmpty(axisInfo)
             ? pairLabel : $"{pairLabel}  {axisInfo}";
-        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}] [{speedName}]\n{line2}";
+        string slotInfo = rotationSnapshot != null ? rotationSnapshot.GetSlotDisplay() : "";
+        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}] [{speedName}]\n{line2}\n{slotInfo}";
     }
 
     string GetActiveSpeedName()

@@ -13,106 +13,8 @@ public class RotationSnapshot : MonoBehaviour
     public int currentSlot;
     bool[] slotUsed = new bool[slotCount];
 
-    // Long press tracking
-    float leftGripHoldTime;
-    float rightGripHoldTime;
-    const float holdThreshold = 0.5f;
-    bool leftGripSaved;  // prevent repeat save while held
-    bool rightGripLoaded;
-
-    bool prevDpadUp;
-
-    void Update()
-    {
-        bool slotUp = false;
-        bool savePress = false;
-        bool loadPress = false;
-        float leftGripVal = 0f, rightGripVal = 0f;
-
-#if UNITY_EDITOR
-        var kb = Keyboard.current;
-        if (kb != null)
-        {
-            if (kb.digit4Key.wasPressedThisFrame) slotUp = true; // 4 key for slot cycle
-            if (kb.zKey.wasPressedThisFrame) savePress = true;
-            if (kb.xKey.wasPressedThisFrame) loadPress = true;
-        }
-#else
-        var leftCtrl = XRController.leftHand;
-        if (leftCtrl != null)
-        {
-            // Dpad up to cycle slot
-            var dpadUp = leftCtrl.TryGetChildControl<ButtonControl>("thumbstickClicked");
-            // Use right controller's dpad for slot cycling
-        }
-
-        var rightCtrl = XRController.rightHand;
-        if (rightCtrl != null)
-        {
-            // Read thumbstick Y for dpad-up emulation
-            var stick = rightCtrl.TryGetChildControl<StickControl>("thumbstick");
-            if (stick != null)
-            {
-                bool up = stick.y.ReadValue() > 0.8f;
-                if (up && !prevDpadUp) slotUp = true;
-                prevDpadUp = up;
-            }
-        }
-
-        // Grip hold for save/load
-        if (leftCtrl != null)
-        {
-            var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
-            if (grip != null) leftGripVal = grip.ReadValue();
-        }
-        if (rightCtrl != null)
-        {
-            var grip = rightCtrl.TryGetChildControl<AxisControl>("grip");
-            if (grip != null) rightGripVal = grip.ReadValue();
-        }
-#endif
-
-        // Slot cycling
-        if (slotUp)
-            currentSlot = (currentSlot + 1) % slotCount;
-
-        // Long press save (left grip)
-        if (leftGripVal > 0.5f)
-        {
-            leftGripHoldTime += Time.deltaTime;
-            if (leftGripHoldTime >= holdThreshold && !leftGripSaved)
-            {
-                savePress = true;
-                leftGripSaved = true;
-            }
-        }
-        else
-        {
-            leftGripHoldTime = 0f;
-            leftGripSaved = false;
-        }
-
-        // Long press load (right grip)
-        if (rightGripVal > 0.5f)
-        {
-            rightGripHoldTime += Time.deltaTime;
-            if (rightGripHoldTime >= holdThreshold && !rightGripLoaded)
-            {
-                loadPress = true;
-                rightGripLoaded = true;
-            }
-        }
-        else
-        {
-            rightGripHoldTime = 0f;
-            rightGripLoaded = false;
-        }
-
-        if (savePress) SaveCurrentAngles();
-        if (loadPress) LoadCurrentAngles();
-    }
-
-    void SaveCurrentAngles()
+    // Called by ShapeManager on A short press
+    public void SaveToCurrentSlot()
     {
         GameObject shape = GetActiveShape();
         if (shape == null) return;
@@ -124,14 +26,18 @@ public class RotationSnapshot : MonoBehaviour
         slotUsed[currentSlot] = true;
     }
 
-    void LoadCurrentAngles()
+    // Called by ShapeManager on B long press
+    public void CycleSlotAndRestore()
     {
-        if (!slotUsed[currentSlot]) return;
+        currentSlot = (currentSlot + 1) % slotCount;
 
-        GameObject shape = GetActiveShape();
-        if (shape == null) return;
-
-        SetShapeAngles(shape, slots[currentSlot]);
+        // Auto-restore if slot has saved data
+        if (slotUsed[currentSlot])
+        {
+            GameObject shape = GetActiveShape();
+            if (shape != null)
+                SetShapeAngles(shape, slots[currentSlot]);
+        }
     }
 
     float[] GetShapeAngles(GameObject shape)
@@ -167,7 +73,12 @@ public class RotationSnapshot : MonoBehaviour
         var sb = new System.Text.StringBuilder();
         sb.Append($"Slot [{currentSlot + 1}/{slotCount}] ");
         for (int i = 0; i < slotCount; i++)
-            sb.Append(slotUsed[i] ? "+" : "o");
+        {
+            if (i == currentSlot)
+                sb.Append(slotUsed[i] ? "[+]" : "[o]");
+            else
+                sb.Append(slotUsed[i] ? "+" : "o");
+        }
         return sb.ToString();
     }
 }

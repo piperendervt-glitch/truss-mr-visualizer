@@ -25,10 +25,10 @@ public class DebugDisplay : MonoBehaviour
         var go = new GameObject("DebugLabel");
         go.transform.SetParent(transform, false);
         debugLabel = go.AddComponent<TextMeshPro>();
-        debugLabel.fontSize = 0.04f;
+        debugLabel.fontSize = 0.08f;
         debugLabel.alignment = TextAlignmentOptions.TopLeft;
         debugLabel.color = Color.white;
-        debugLabel.rectTransform.sizeDelta = new Vector2(3f, 2f);
+        debugLabel.rectTransform.sizeDelta = new Vector2(6f, 4f);
         debugLabel.gameObject.SetActive(false);
     }
 
@@ -71,14 +71,17 @@ public class DebugDisplay : MonoBehaviour
             fpsTimer = 0f;
         }
 
-        // Position below shape label
+        // Position: camera-fixed, upper-left
         GameObject activeShape = GetActiveShape();
         var cam = Camera.main;
-        if (cam != null && activeShape != null)
+        if (cam != null)
         {
-            debugLabel.transform.position = activeShape.transform.position + Vector3.down * 0.35f;
-            debugLabel.transform.LookAt(cam.transform);
-            debugLabel.transform.Rotate(0f, 180f, 0f);
+            Vector3 fwd = cam.transform.forward;
+            Vector3 right = cam.transform.right;
+            Vector3 up = cam.transform.up;
+            debugLabel.transform.position = cam.transform.position
+                + fwd * 0.8f + up * 0.15f - right * 0.25f;
+            debugLabel.transform.rotation = Quaternion.LookRotation(fwd, up);
         }
 
         // Build debug text
