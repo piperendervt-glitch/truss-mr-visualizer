@@ -8,6 +8,9 @@
 /Recordings/
 /.utmp/
 /.claude/
+/.vs/
+.vsconfig
+**/Temp/
 *.csproj
 *.sln
 *.suo
@@ -15,3 +18,8 @@
 *.pidb
 *.booproj
 *.unityproj
+*.apk
+*.aab
+*BurstDebugInformation_DoNotShip/
+*BackUpThisFolder_ButDontShipItWithYourGame/
+crashdump.*
