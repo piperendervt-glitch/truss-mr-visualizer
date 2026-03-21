@@ -181,8 +181,8 @@ public class MenuUI : MonoBehaviour
                 if (thomas != null) thomas.SetParticleCount(Mathf.Clamp(thomas.particleCount + dir * 50, 50, 2000));
                 break;
             case 1: // Trail Length
-                if (lorenz != null) lorenz.SetTrailLength(Mathf.Clamp(lorenz.trailLength + dir * 50, 50, 500));
-                if (thomas != null) thomas.SetTrailLength(Mathf.Clamp(thomas.trailLength + dir * 50, 50, 500));
+                if (lorenz != null) lorenz.SetTrailLength(Mathf.Clamp(lorenz.trailLength + dir * 10, 0, 500));
+                if (thomas != null) thomas.SetTrailLength(Mathf.Clamp(thomas.trailLength + dir * 10, 0, 500));
                 break;
             case 2: // Multi Mode (use left/right as toggle)
                 if (lorenz != null) lorenz.SetMultiMode(!lorenz.multiMode);

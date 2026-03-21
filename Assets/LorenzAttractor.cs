@@ -201,20 +201,27 @@ public class LorenzAttractor : MonoBehaviour
             particleSpheres[i].GetComponent<MeshRenderer>().material.color = col;
 
             // Particle trail
-            var pts = pTrailPts[i];
-            int h = pHeads[i];
-            pts[h] = worldPos;
-            pHeads[i] = (h + 1) % trailLength;
-            if (pCounts[i] < trailLength) pCounts[i]++;
-
-            int pc = pCounts[i];
-            int st = pc < trailLength ? 0 : pHeads[i];
             var tlr = particleTrails[i];
-            tlr.positionCount = pc;
-            var pos = new Vector3[pc];
-            for (int j = 0; j < pc; j++)
-                pos[j] = pts[(st + j) % trailLength];
-            tlr.SetPositions(pos);
+            if (trailLength > 0)
+            {
+                var pts = pTrailPts[i];
+                int h = pHeads[i];
+                pts[h] = worldPos;
+                pHeads[i] = (h + 1) % trailLength;
+                if (pCounts[i] < trailLength) pCounts[i]++;
+
+                int pc = pCounts[i];
+                int st = pc < trailLength ? 0 : pHeads[i];
+                tlr.positionCount = pc;
+                var pos = new Vector3[pc];
+                for (int j = 0; j < pc; j++)
+                    pos[j] = pts[(st + j) % trailLength];
+                tlr.SetPositions(pos);
+            }
+            else
+            {
+                tlr.positionCount = 0;
+            }
         }
     }
 
