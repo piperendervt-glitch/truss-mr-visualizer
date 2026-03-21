@@ -33,7 +33,7 @@ public class ShapeManager : MonoBehaviour
         label.fontSize = 0.22f;
         label.alignment = TextAlignmentOptions.Center;
         label.color = new Color(1f, 0.9f, 0f, 1f);
-        label.rectTransform.sizeDelta = new Vector2(2.8f, 0.5f);
+        label.rectTransform.sizeDelta = new Vector2(2.8f, 0.8f);
 
         // Activate first shape, deactivate others
         for (int i = 0; i < shapes.Length; i++)
@@ -82,6 +82,9 @@ public class ShapeManager : MonoBehaviour
 
         if (buttonDown) SwitchToNext();
         if (aButtonDown) CycleBgMode();
+
+        // Update label every frame (pair info changes on stick click)
+        UpdateLabel();
 
         // Position label below the active shape, billboard toward camera
         var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
@@ -200,12 +203,27 @@ public class ShapeManager : MonoBehaviour
         lr.endColor = gridColor;
     }
 
-    // --- Label ---
+    // --- Label (updated every frame to reflect plane pair changes) ---
     void UpdateLabel()
     {
         if (label == null) return;
         string name = currentIndex < shapeNames.Length ? shapeNames[currentIndex] : "Shape";
         string mode = bgMode < bgModeNames.Length ? bgModeNames[bgMode] : "?";
-        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]";
+        string pairLabel = GetActivePairLabel();
+        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]\n{pairLabel}";
+    }
+
+    string GetActivePairLabel()
+    {
+        if (shapes == null || currentIndex >= shapes.Length || shapes[currentIndex] == null)
+            return "";
+
+        var tess = shapes[currentIndex].GetComponent<Tesseract>();
+        if (tess != null) return tess.GetPairLabel();
+
+        var hexa = shapes[currentIndex].GetComponent<Hexadecachoron>();
+        if (hexa != null) return hexa.GetPairLabel();
+
+        return "";
     }
 }

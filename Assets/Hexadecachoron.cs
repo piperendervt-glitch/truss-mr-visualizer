@@ -8,14 +8,27 @@ public class Hexadecachoron : MonoBehaviour
 {
     // 16-cell: 8 vertices, 24 edges, 32 triangular faces
     Vector4[] verts4D = new Vector4[8];
-    Vector3[] localVerts = new Vector3[8]; // local offsets from transform.position
+    Vector3[] localVerts = new Vector3[8];
     float size = 0.10f;
-    float angleXW, angleZW, angleXY, angleYW;
 
-    int[][] faceIndices; // 32 triangles, each 3 vertex indices
+    // 6 rotation planes: 0=XY, 1=XZ, 2=XW, 3=YZ, 4=YW, 5=ZW
+    float[] angles = new float[6];
+    public static readonly string[] planeNames = { "XY", "XZ", "XW", "YZ", "YW", "ZW" };
+
+    public static readonly int[][] leftPairs = {
+        new[]{2,0}, new[]{1,3}, new[]{2,1}, new[]{4,3}, new[]{0,3},
+    };
+    public static readonly int[][] rightPairs = {
+        new[]{5,4}, new[]{2,5}, new[]{3,4}, new[]{1,5}, new[]{0,2},
+    };
+
+    public int currentLeftPair;
+    public int currentRightPair;
+    bool prevLeftClick, prevRightClick;
+
+    int[][] faceIndices;
     Mesh faceMesh;
     Vector3[] meshVerts;
-
     LineRenderer[] lines;
     bool placedOnStart;
 
@@ -24,7 +37,6 @@ public class Hexadecachoron : MonoBehaviour
         foreach (Transform child in transform)
             Destroy(child.gameObject);
 
-        // 8 vertices: ±1 along each of the 4 axes
         verts4D[0] = new Vector4(+1, 0, 0, 0);
         verts4D[1] = new Vector4(-1, 0, 0, 0);
         verts4D[2] = new Vector4(0, +1, 0, 0);
@@ -46,8 +58,13 @@ public class Hexadecachoron : MonoBehaviour
         transform.position = cam.transform.position + cam.transform.forward * 0.8f;
     }
 
-    // --- 32 triangular faces ---
-    // Pick 3 of 4 axis pairs, then choose +/- from each => C(4,3)*2^3 = 32
+    public string GetPairLabel()
+    {
+        var lp = leftPairs[currentLeftPair];
+        var rp = rightPairs[currentRightPair];
+        return $"L:{planeNames[lp[0]]}/{planeNames[lp[1]]}  R:{planeNames[rp[0]]}/{planeNames[rp[1]]}";
+    }
+
     void BuildFaces()
     {
         var list = new System.Collections.Generic.List<int[]>();
@@ -55,13 +72,11 @@ public class Hexadecachoron : MonoBehaviour
 
         for (int skip = 0; skip < 4; skip++)
         {
-            // Choose 3 axis pairs (skip one)
             int[] chosen = new int[3];
             int ci = 0;
             for (int a = 0; a < 4; a++)
                 if (a != skip) chosen[ci++] = a;
 
-            // 2^3 = 8 sign combinations
             for (int sign = 0; sign < 8; sign++)
             {
                 int v0 = axisPairs[chosen[0]][(sign >> 0) & 1];
@@ -70,17 +85,15 @@ public class Hexadecachoron : MonoBehaviour
                 list.Add(new[] { v0, v1, v2 });
             }
         }
-        faceIndices = list.ToArray(); // 32
+        faceIndices = list.ToArray();
     }
 
-    // --- Translucent triangle mesh ---
     void SetupFaceMesh()
     {
-        int faceCount = faceIndices.Length; // 32
+        int faceCount = faceIndices.Length;
         meshVerts = new Vector3[faceCount * 3];
         int[] tris = new int[faceCount * 3];
         Color[] colors = new Color[faceCount * 3];
-
         var faceColor = new Color(0f, 0.85f, 1f, 0.35f);
 
         for (int f = 0; f < faceCount; f++)
@@ -100,17 +113,14 @@ public class Hexadecachoron : MonoBehaviour
 
         var go = new GameObject("faces");
         go.transform.SetParent(transform, false);
-
         go.AddComponent<MeshFilter>().mesh = faceMesh;
         var mr = go.AddComponent<MeshRenderer>();
-
         var mat = new Material(Shader.Find("Sprites/Default"));
         mat.color = Color.white;
         mat.renderQueue = (int)RenderQueue.Transparent;
         mr.material = mat;
     }
 
-    // --- 24 edges (all non-opposing pairs, distance = sqrt2) ---
     void SetupEdges()
     {
         var edgeList = new System.Collections.Generic.List<int[]>();
@@ -119,7 +129,7 @@ public class Hexadecachoron : MonoBehaviour
                 if (!IsOpposing(a, b))
                     edgeList.Add(new[] { a, b });
 
-        lines = new LineRenderer[edgeList.Count]; // 24
+        lines = new LineRenderer[edgeList.Count];
         var edgeMat = new Material(Shader.Find("Sprites/Default"));
         for (int i = 0; i < edgeList.Count; i++)
         {
@@ -137,7 +147,6 @@ public class Hexadecachoron : MonoBehaviour
         }
     }
 
-    // Opposing vertices: (0,1), (2,3), (4,5), (6,7)
     bool IsOpposing(int a, int b)
     {
         int lo = Mathf.Min(a, b);
@@ -147,20 +156,19 @@ public class Hexadecachoron : MonoBehaviour
 
     void Update()
     {
-        // A: Place in front of HMD once on first frame
         if (!placedOnStart)
         {
             PlaceInFrontOfCamera();
             placedOnStart = true;
         }
 
-        // Pause 4D rotation while grabbed
         var grabber = GetComponent<ShapeGrabber>();
         bool grabbed = grabber != null && grabber.isGrabbed;
 
         float speed = 1.5f * Time.deltaTime;
         float lx = 0f, ly = 0f, rx = 0f, ry = 0f;
         bool gripPressed = false;
+        bool leftClickDown = false, rightClickDown = false;
 
         if (!grabbed)
         {
@@ -177,6 +185,8 @@ public class Hexadecachoron : MonoBehaviour
             if (kb.iKey.isPressed) ry = 1f;
             if (kb.kKey.isPressed) ry = -1f;
             if (kb.gKey.wasPressedThisFrame) gripPressed = true;
+            if (kb.qKey.wasPressedThisFrame) leftClickDown = true;
+            if (kb.eKey.wasPressedThisFrame) rightClickDown = true;
         }
 #else
         var leftCtrl = XRController.leftHand;
@@ -185,9 +195,16 @@ public class Hexadecachoron : MonoBehaviour
             var stick = leftCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null) { lx = stick.x.ReadValue(); ly = stick.y.ReadValue(); }
 
-            // B: Left grip to reposition
             var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
             if (grip != null && grip.ReadValue() > 0.5f) gripPressed = true;
+
+            var lClick = leftCtrl.TryGetChildControl<ButtonControl>("thumbstickClicked");
+            if (lClick != null)
+            {
+                bool p = lClick.isPressed;
+                if (p && !prevLeftClick) leftClickDown = true;
+                prevLeftClick = p;
+            }
         }
 
         var rightCtrl = XRController.rightHand;
@@ -195,31 +212,45 @@ public class Hexadecachoron : MonoBehaviour
         {
             var stick = rightCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null) { rx = stick.x.ReadValue(); ry = stick.y.ReadValue(); }
+
+            var rClick = rightCtrl.TryGetChildControl<ButtonControl>("thumbstickClicked");
+            if (rClick != null)
+            {
+                bool p = rClick.isPressed;
+                if (p && !prevRightClick) rightClickDown = true;
+                prevRightClick = p;
+            }
         }
 #endif
         } // end if (!grabbed)
 
-        // B: Reposition on grip press
+        if (leftClickDown) currentLeftPair = (currentLeftPair + 1) % leftPairs.Length;
+        if (rightClickDown) currentRightPair = (currentRightPair + 1) % rightPairs.Length;
+
         if (gripPressed) PlaceInFrontOfCamera();
 
-        angleXW += lx * speed;
-        angleXY += ly * speed;
-        angleZW += rx * speed;
-        angleYW += ry * speed;
+        var lp = leftPairs[currentLeftPair];
+        var rp = rightPairs[currentRightPair];
+        angles[lp[0]] += lx * speed;
+        angles[lp[1]] += ly * speed;
+        angles[rp[0]] += rx * speed;
+        angles[rp[1]] += ry * speed;
 
-        // 4D rotation + perspective projection (local offsets)
+        // 4D rotation + perspective projection
         for (int i = 0; i < 8; i++)
         {
             Vector4 v = verts4D[i];
-            v = RotateXW(v, angleXW);
-            v = RotateXY(v, angleXY);
-            v = RotateZW(v, angleZW);
-            v = RotateYW(v, angleYW);
+            v = Rotate4D(v, 0, angles[0]);
+            v = Rotate4D(v, 1, angles[1]);
+            v = Rotate4D(v, 2, angles[2]);
+            v = Rotate4D(v, 3, angles[3]);
+            v = Rotate4D(v, 4, angles[4]);
+            v = Rotate4D(v, 5, angles[5]);
             float p = 2f / (2f - v.w);
             localVerts[i] = new Vector3(v.x * p * size, v.y * p * size, v.z * p * size);
         }
 
-        // Update face mesh (local space — mesh GO is at transform.position)
+        // Update face mesh
         for (int f = 0; f < faceIndices.Length; f++)
         {
             int[] tri = faceIndices[f];
@@ -231,7 +262,7 @@ public class Hexadecachoron : MonoBehaviour
         faceMesh.RecalculateNormals();
         faceMesh.RecalculateBounds();
 
-        // Update wireframe edges (world space, applying transform rotation)
+        // Update wireframe edges
         Vector3 pos = transform.position;
         Quaternion rot = transform.rotation;
         int idx = 0;
@@ -245,25 +276,18 @@ public class Hexadecachoron : MonoBehaviour
             }
     }
 
-    // --- 4D Rotations ---
-    Vector4 RotateXW(Vector4 v, float a)
+    Vector4 Rotate4D(Vector4 v, int plane, float a)
     {
         float c = Mathf.Cos(a), s = Mathf.Sin(a);
-        return new Vector4(v.x * c - v.w * s, v.y, v.z, v.x * s + v.w * c);
-    }
-    Vector4 RotateXY(Vector4 v, float a)
-    {
-        float c = Mathf.Cos(a), s = Mathf.Sin(a);
-        return new Vector4(v.x * c - v.y * s, v.x * s + v.y * c, v.z, v.w);
-    }
-    Vector4 RotateZW(Vector4 v, float a)
-    {
-        float c = Mathf.Cos(a), s = Mathf.Sin(a);
-        return new Vector4(v.x, v.y, v.z * c - v.w * s, v.z * s + v.w * c);
-    }
-    Vector4 RotateYW(Vector4 v, float a)
-    {
-        float c = Mathf.Cos(a), s = Mathf.Sin(a);
-        return new Vector4(v.x, v.y * c - v.w * s, v.z, v.y * s + v.w * c);
+        switch (plane)
+        {
+            case 0: return new Vector4(v.x*c - v.y*s, v.x*s + v.y*c, v.z, v.w);
+            case 1: return new Vector4(v.x*c - v.z*s, v.y, v.x*s + v.z*c, v.w);
+            case 2: return new Vector4(v.x*c - v.w*s, v.y, v.z, v.x*s + v.w*c);
+            case 3: return new Vector4(v.x, v.y*c - v.z*s, v.y*s + v.z*c, v.w);
+            case 4: return new Vector4(v.x, v.y*c - v.w*s, v.z, v.y*s + v.w*c);
+            case 5: return new Vector4(v.x, v.y, v.z*c - v.w*s, v.z*s + v.w*c);
+            default: return v;
+        }
     }
 }
