@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 public class Tesseract : MonoBehaviour
 {
     Vector4[] verts4D = new Vector4[16];
-    Vector3[] verts3D = new Vector3[16];
+    Vector3[] localVerts = new Vector3[16]; // local offsets from transform.position
     float size = 0.15f;
     float angleXW, angleZW, angleXY, angleYW;
 
@@ -18,6 +18,7 @@ public class Tesseract : MonoBehaviour
 
     // Wireframe edges
     LineRenderer[] lines;
+    bool placedOnStart;
 
     void Start()
     {
@@ -35,6 +36,13 @@ public class Tesseract : MonoBehaviour
         BuildFaces();
         SetupFaceMesh();
         SetupEdges();
+    }
+
+    void PlaceInFrontOfCamera()
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+        transform.position = cam.transform.position + cam.transform.forward * 0.8f;
     }
 
     // --- vertex index from sign values (-1 or +1) ---
@@ -168,8 +176,16 @@ public class Tesseract : MonoBehaviour
 
     void Update()
     {
+        // A: Place in front of HMD once on first frame
+        if (!placedOnStart)
+        {
+            PlaceInFrontOfCamera();
+            placedOnStart = true;
+        }
+
         float speed = 1.5f * Time.deltaTime;
         float lx = 0f, ly = 0f, rx = 0f, ry = 0f;
+        bool gripPressed = false;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
@@ -183,6 +199,7 @@ public class Tesseract : MonoBehaviour
             if (kb.lKey.isPressed) rx = 1f;
             if (kb.iKey.isPressed) ry = 1f;
             if (kb.kKey.isPressed) ry = -1f;
+            if (kb.gKey.wasPressedThisFrame) gripPressed = true;
         }
 #else
         // Quest 3: read thumbstick via Input System XRController
@@ -191,6 +208,10 @@ public class Tesseract : MonoBehaviour
         {
             var stick = leftCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null) { lx = stick.x.ReadValue(); ly = stick.y.ReadValue(); }
+
+            // B: Left grip to reposition
+            var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
+            if (grip != null && grip.ReadValue() > 0.5f) gripPressed = true;
         }
 
         var rightCtrl = XRController.rightHand;
@@ -201,12 +222,15 @@ public class Tesseract : MonoBehaviour
         }
 #endif
 
+        // B: Reposition on grip press
+        if (gripPressed) PlaceInFrontOfCamera();
+
         angleXW += lx * speed;
         angleXY += ly * speed;
         angleZW += rx * speed;
         angleYW += ry * speed;
 
-        // Project 4D -> 3D
+        // Project 4D -> 3D (local offsets)
         for (int i = 0; i < 16; i++)
         {
             Vector4 v = verts4D[i];
@@ -215,33 +239,31 @@ public class Tesseract : MonoBehaviour
             v = RotateZW(v, angleZW);
             v = RotateYW(v, angleYW);
             float p = 2f / (2f - v.w);
-            verts3D[i] = transform.position + new Vector3(
-                v.x * p * size,
-                v.y * p * size,
-                v.z * p * size);
+            localVerts[i] = new Vector3(v.x * p * size, v.y * p * size, v.z * p * size);
         }
 
-        // Update face mesh
+        // Update face mesh (local space — mesh GO is at transform.position)
         for (int f = 0; f < faceIndices.Length; f++)
         {
             int[] q = faceIndices[f];
-            meshVerts[f * 4 + 0] = verts3D[q[0]];
-            meshVerts[f * 4 + 1] = verts3D[q[1]];
-            meshVerts[f * 4 + 2] = verts3D[q[2]];
-            meshVerts[f * 4 + 3] = verts3D[q[3]];
+            meshVerts[f * 4 + 0] = localVerts[q[0]];
+            meshVerts[f * 4 + 1] = localVerts[q[1]];
+            meshVerts[f * 4 + 2] = localVerts[q[2]];
+            meshVerts[f * 4 + 3] = localVerts[q[3]];
         }
         faceMesh.vertices = meshVerts;
         faceMesh.RecalculateNormals();
         faceMesh.RecalculateBounds();
 
-        // Update wireframe edges
+        // Update wireframe edges (world space)
+        Vector3 pos = transform.position;
         int idx = 0;
         for (int a = 0; a < 16; a++)
             for (int b = a + 1; b < 16; b++)
             {
                 if (!DiffersByOne(verts4D[a], verts4D[b])) continue;
-                lines[idx].SetPosition(0, verts3D[a]);
-                lines[idx].SetPosition(1, verts3D[b]);
+                lines[idx].SetPosition(0, pos + localVerts[a]);
+                lines[idx].SetPosition(1, pos + localVerts[b]);
                 idx++;
             }
     }
