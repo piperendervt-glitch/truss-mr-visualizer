@@ -12,7 +12,7 @@ public class DebugDisplay : MonoBehaviour
     public RotationSnapshot rotationSnapshot;
     public int activeIndex;
 
-    bool visible = true; // default ON for testing
+    bool visible; // default OFF
     GameObject canvasGo;
     TextMeshProUGUI debugTMP;
 
@@ -61,8 +61,7 @@ public class DebugDisplay : MonoBehaviour
         bgRT.offsetMin = Vector2.zero;
         bgRT.offsetMax = Vector2.zero;
 
-        // Force visible for testing
-        canvasGo.SetActive(true);
+        canvasGo.SetActive(false);
     }
 
     void Update()
@@ -93,8 +92,8 @@ public class DebugDisplay : MonoBehaviour
         {
             canvasGo.transform.position = cam.transform.position
                 + cam.transform.forward * 1.0f
-                + cam.transform.up * 0.15f
-                + cam.transform.right * -0.3f;
+                + cam.transform.up * -0.15f
+                + cam.transform.right * 0.25f;
             canvasGo.transform.LookAt(cam.transform.position);
             canvasGo.transform.Rotate(0f, 180f, 0f);
         }
