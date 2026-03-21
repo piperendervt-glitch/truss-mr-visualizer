@@ -15,7 +15,7 @@ public class ShapeManager : MonoBehaviour
 
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
-    string[] bgModeNames = { "MR", "VR Black", "VR Grid" };
+    string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
     string[] shapeNames = { "Tesseract", "Hexadecachoron" };
 
     // Grid
@@ -133,19 +133,7 @@ public class ShapeManager : MonoBehaviour
 
         switch (bgMode)
         {
-            case 0: // MR
-                if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
-                if (passthroughLayer != null) passthroughLayer.SetActive(true);
-                if (gridRoot != null) gridRoot.SetActive(false);
-                RenderSettings.fog = false;
-                break;
-            case 1: // VR Black
-                if (cam != null) cam.backgroundColor = Color.black;
-                if (passthroughLayer != null) passthroughLayer.SetActive(false);
-                if (gridRoot != null) gridRoot.SetActive(false);
-                RenderSettings.fog = false;
-                break;
-            case 2: // VR Grid
+            case 0: // VR Grid
                 if (cam != null) cam.backgroundColor = new Color(0.65f, 0.65f, 0.72f, 1f);
                 if (passthroughLayer != null) passthroughLayer.SetActive(false);
                 if (gridRoot != null) gridRoot.SetActive(true);
@@ -154,6 +142,18 @@ public class ShapeManager : MonoBehaviour
                 RenderSettings.fogColor = new Color(0.7f, 0.7f, 0.75f, 1f);
                 RenderSettings.fogStartDistance = 5f;
                 RenderSettings.fogEndDistance = 25f;
+                break;
+            case 1: // MR
+                if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+                if (passthroughLayer != null) passthroughLayer.SetActive(true);
+                if (gridRoot != null) gridRoot.SetActive(false);
+                RenderSettings.fog = false;
+                break;
+            case 2: // VR Black
+                if (cam != null) cam.backgroundColor = Color.black;
+                if (passthroughLayer != null) passthroughLayer.SetActive(false);
+                if (gridRoot != null) gridRoot.SetActive(false);
+                RenderSettings.fog = false;
                 break;
         }
     }
