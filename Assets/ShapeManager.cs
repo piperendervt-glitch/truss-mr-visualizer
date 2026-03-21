@@ -7,9 +7,12 @@ using TMPro;
 public class ShapeManager : MonoBehaviour
 {
     public GameObject[] shapes;
+    public GameObject passthroughLayer; // OVRPassthroughLayer GameObject
     int currentIndex;
     TextMeshPro label;
     bool prevButton;
+    bool prevAButton;
+    bool isMR = true;
 
     string[] shapeNames = { "Tesseract", "Hexadecachoron" };
 
@@ -35,27 +38,40 @@ public class ShapeManager : MonoBehaviour
     void Update()
     {
         bool buttonDown = false;
+        bool aButtonDown = false;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
-        if (kb != null && kb.spaceKey.wasPressedThisFrame)
-            buttonDown = true;
+        if (kb != null)
+        {
+            if (kb.spaceKey.wasPressedThisFrame) buttonDown = true;
+            if (kb.tabKey.wasPressedThisFrame) aButtonDown = true;
+        }
 #else
-        // Quest 3: B button on right controller (secondaryButton)
+        // Quest 3: B button = shape switch, A button = MR/VR toggle
         var rightCtrl = XRController.rightHand;
         if (rightCtrl != null)
         {
-            var btn = rightCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
-            if (btn != null)
+            var bBtn = rightCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
+            if (bBtn != null)
             {
-                bool pressed = btn.isPressed;
+                bool pressed = bBtn.isPressed;
                 if (pressed && !prevButton) buttonDown = true;
                 prevButton = pressed;
+            }
+
+            var aBtn = rightCtrl.TryGetChildControl<ButtonControl>("primaryButton");
+            if (aBtn != null)
+            {
+                bool pressed = aBtn.isPressed;
+                if (pressed && !prevAButton) aButtonDown = true;
+                prevAButton = pressed;
             }
         }
 #endif
 
         if (buttonDown) SwitchToNext();
+        if (aButtonDown) ToggleMRVR();
 
         // Position label below the active shape, billboard toward camera
         var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
@@ -83,10 +99,30 @@ public class ShapeManager : MonoBehaviour
         UpdateLabel();
     }
 
+    void ToggleMRVR()
+    {
+        isMR = !isMR;
+        var cam = Camera.main;
+
+        if (isMR)
+        {
+            if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            if (passthroughLayer != null) passthroughLayer.SetActive(true);
+        }
+        else
+        {
+            if (cam != null) cam.backgroundColor = Color.black;
+            if (passthroughLayer != null) passthroughLayer.SetActive(false);
+        }
+
+        UpdateLabel();
+    }
+
     void UpdateLabel()
     {
         if (label == null) return;
         string name = currentIndex < shapeNames.Length ? shapeNames[currentIndex] : "Shape";
-        label.text = $"{name} ({currentIndex + 1}/{shapes.Length})";
+        string mode = isMR ? "MR" : "VR";
+        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]";
     }
 }
