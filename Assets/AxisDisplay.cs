@@ -271,7 +271,7 @@ public class AxisDisplay : MonoBehaviour
     public string GetSelectedAxisName()
     {
         if (selectedAxis >= 0 && selectedAxis < axisNames.Length)
-            return $"[{axisNames[selectedAxis]}軸選択中]";
+            return $"[{axisNames[selectedAxis]}-Axis]";
         return "";
     }
 }
