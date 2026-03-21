@@ -209,7 +209,7 @@ public class Tesseract : MonoBehaviour
         bool gripPressed = false;
         bool leftClickDown = false, rightClickDown = false;
 
-        if (!grabbed)
+        if (!grabbed && !MenuUI.isMenuOpen)
         {
 #if UNITY_EDITOR
         var kb = Keyboard.current;

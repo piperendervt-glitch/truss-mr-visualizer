@@ -11,6 +11,7 @@ public class ShapeManager : MonoBehaviour
     public AxisDisplay axisDisplay;
     public DebugDisplay debugDisplay;
     public RotationSnapshot rotationSnapshot;
+    public MenuUI menuUI;
     int currentIndex;
     TextMeshPro label;
 
@@ -116,6 +117,8 @@ public class ShapeManager : MonoBehaviour
         bWasPressed = bPressed;
 #endif
 
+        if (MenuUI.isMenuOpen) { UpdateLabel(); return; }
+
         if (bShort) SwitchToNext();
         if (aLong) CycleBgMode();
         if (aShort)
@@ -171,6 +174,7 @@ public class ShapeManager : MonoBehaviour
         if (axisDisplay != null) axisDisplay.activeIndex = currentIndex;
         if (debugDisplay != null) debugDisplay.activeIndex = currentIndex;
         if (rotationSnapshot != null) rotationSnapshot.activeIndex = currentIndex;
+        if (menuUI != null) menuUI.activeIndex = currentIndex;
 
         UpdateLabel();
     }

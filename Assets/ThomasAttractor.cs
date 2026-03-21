@@ -30,8 +30,8 @@ public class ThomasAttractor : MonoBehaviour
     bool placedOnStart;
 
     // Multi-particle mode
-    const int particleCount = 200;
-    const int particleTrailMax = 100;
+    public int particleCount = 200;
+    public int trailLength = 100;
     const float particleRadius = 0.003f;
     const float scatterRange = 0.1f;
     const float multiLongPress = 1.0f;
@@ -111,7 +111,7 @@ public class ThomasAttractor : MonoBehaviour
         var grabber = GetComponent<ShapeGrabber>();
         bool grabbed = grabber != null && grabber.isGrabbed;
 
-        if (!grabbed)
+        if (!grabbed && !MenuUI.isMenuOpen)
             HandleInput();
 
         Vector3 center = transform.position;
@@ -200,16 +200,16 @@ public class ThomasAttractor : MonoBehaviour
             var pts = pTrailPts[i];
             int h = pHeads[i];
             pts[h] = worldPos;
-            pHeads[i] = (h + 1) % particleTrailMax;
-            if (pCounts[i] < particleTrailMax) pCounts[i]++;
+            pHeads[i] = (h + 1) % trailLength;
+            if (pCounts[i] < trailLength) pCounts[i]++;
 
             int pc = pCounts[i];
-            int st = pc < particleTrailMax ? 0 : pHeads[i];
+            int st = pc < trailLength ? 0 : pHeads[i];
             var tlr = particleTrails[i];
             tlr.positionCount = pc;
             var pos = new Vector3[pc];
             for (int j = 0; j < pc; j++)
-                pos[j] = pts[(st + j) % particleTrailMax];
+                pos[j] = pts[(st + j) % trailLength];
             tlr.SetPositions(pos);
         }
     }
@@ -311,13 +311,26 @@ public class ThomasAttractor : MonoBehaviour
         dt = Mathf.Clamp(dt + ryIn * 0.1f * paramSpeed, dtMin, dtMax);
     }
 
-    void ToggleMultiMode()
+    void ToggleMultiMode() { SetMultiMode(!multiMode); }
+
+    public void SetMultiMode(bool on)
     {
-        multiMode = !multiMode;
-        if (multiMode)
-            InitMultiParticles();
-        else
-            DestroyMultiParticles();
+        if (on == multiMode) return;
+        multiMode = on;
+        if (on) InitMultiParticles();
+        else DestroyMultiParticles();
+    }
+
+    public void SetParticleCount(int count)
+    {
+        particleCount = count;
+        if (multiMode) { DestroyMultiParticles(); InitMultiParticles(); }
+    }
+
+    public void SetTrailLength(int len)
+    {
+        trailLength = len;
+        if (multiMode) { DestroyMultiParticles(); InitMultiParticles(); }
     }
 
     void InitMultiParticles()
@@ -374,7 +387,7 @@ public class ThomasAttractor : MonoBehaviour
             tlr.positionCount = 0;
             particleTrails[i] = tlr;
 
-            pTrailPts[i] = new Vector3[particleTrailMax];
+            pTrailPts[i] = new Vector3[trailLength];
             pHeads[i] = 0;
             pCounts[i] = 0;
         }
