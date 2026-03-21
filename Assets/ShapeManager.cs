@@ -19,10 +19,10 @@ public class ShapeManager : MonoBehaviour
         var labelGo = new GameObject("ShapeLabel");
         labelGo.transform.SetParent(transform, false);
         label = labelGo.AddComponent<TextMeshPro>();
-        label.fontSize = 1.5f;
-        label.alignment = TextAlignmentOptions.TopLeft;
+        label.fontSize = 0.05f;
+        label.alignment = TextAlignmentOptions.Center;
         label.color = Color.cyan;
-        label.rectTransform.sizeDelta = new Vector2(2f, 0.5f);
+        label.rectTransform.sizeDelta = new Vector2(0.5f, 0.1f);
 
         // Activate first shape, deactivate others
         for (int i = 0; i < shapes.Length; i++)
@@ -57,18 +57,14 @@ public class ShapeManager : MonoBehaviour
 
         if (buttonDown) SwitchToNext();
 
-        // Position label at top-left of camera view
+        // Position label below the active shape, billboard toward camera
+        var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
         var cam = Camera.main;
-        if (cam != null && label != null)
+        if (cam != null && label != null && activeShape != null)
         {
-            Vector3 fwd = cam.transform.forward;
-            Vector3 right = cam.transform.right;
-            Vector3 up = cam.transform.up;
-            label.transform.position = cam.transform.position
-                + fwd * 0.8f
-                + up * 0.10f
-                - right * 0.12f;
-            label.transform.rotation = Quaternion.LookRotation(fwd, up);
+            label.transform.position = activeShape.transform.position + Vector3.down * 0.2f;
+            label.transform.LookAt(cam.transform);
+            label.transform.Rotate(0f, 180f, 0f); // LookAt faces away, flip to face camera
         }
     }
 
