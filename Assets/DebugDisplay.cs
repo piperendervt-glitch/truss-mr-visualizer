@@ -173,6 +173,8 @@ public class DebugDisplay : MonoBehaviour
                 float lv = lorenz.lyapunovExponent;
                 string lc = lv > 0.01f ? "red" : lv < -0.01f ? "green" : "yellow";
                 sb.AppendLine($"Lyapunov: <color={lc}>{(lv >= 0 ? "+" : "")}{lv:F3}</color>");
+                if (lorenz.multiMode)
+                    sb.AppendLine($"\u03bb mean:<color={Lc(lorenz.lyapMean)}>{lorenz.lyapMean:+0.00;-0.00}</color>  max:<color={Lc(lorenz.lyapMax)}>{lorenz.lyapMax:+0.00;-0.00}</color>  min:<color={Lc(lorenz.lyapMin)}>{lorenz.lyapMin:+0.00;-0.00}</color>");
             }
             else if (thomasDbg != null)
             {
@@ -181,6 +183,8 @@ public class DebugDisplay : MonoBehaviour
                 float lv = thomasDbg.lyapunovExponent;
                 string lc = lv > 0.01f ? "red" : lv < -0.01f ? "green" : "yellow";
                 sb.AppendLine($"Lyapunov: <color={lc}>{(lv >= 0 ? "+" : "")}{lv:F3}</color>");
+                if (thomasDbg.multiMode)
+                    sb.AppendLine($"\u03bb mean:<color={Lc(thomasDbg.lyapMean)}>{thomasDbg.lyapMean:+0.00;-0.00}</color>  max:<color={Lc(thomasDbg.lyapMax)}>{thomasDbg.lyapMax:+0.00;-0.00}</color>  min:<color={Lc(thomasDbg.lyapMin)}>{thomasDbg.lyapMin:+0.00;-0.00}</color>");
             }
             else
             {
@@ -217,6 +221,8 @@ public class DebugDisplay : MonoBehaviour
 
         debugTMP.text = sb.ToString();
     }
+
+    static string Lc(float v) { return v > 0.01f ? "red" : v < -0.01f ? "green" : "yellow"; }
 
     GameObject GetActiveShape()
     {

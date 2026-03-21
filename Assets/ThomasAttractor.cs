@@ -35,7 +35,13 @@ public class ThomasAttractor : MonoBehaviour
     float lyapSum;
     int lyapFrames;
     public float lyapunovExponent;
-    const int lyapAvgFrames = 100;
+    const int lyapAvgFrames = 30;
+
+    // Per-particle Lyapunov (sampled every lyapSampleInterval-th particle)
+    const int lyapSampleInterval = 4;
+    float[] pRefX, pRefY, pRefZ, pLyapSum, particleLyap;
+    int[] pLyapFrames;
+    public float lyapMean, lyapMax, lyapMin;
 
     // Multi-particle mode
     public int particleCount = 200;
@@ -81,12 +87,22 @@ public class ThomasAttractor : MonoBehaviour
     public void ResetTrail()
     {
         tx = 0.1f; ty = 0f; tz = 0f;
-        refX = tx + lyapD0; refY = ty; refZ = tz;
-        lyapSum = 0f; lyapFrames = 0; lyapunovExponent = 0f;
+        lyapunovExponent = 0f;
+        ResetLyapunov();
         head = 0; count = 0;
         if (lr != null) lr.positionCount = 0;
 
         if (multiMode) ResetParticles();
+    }
+
+    void ResetLyapunov()
+    {
+        refX = tx + lyapD0; refY = ty; refZ = tz;
+        lyapSum = 0f; lyapFrames = 0;
+        if (pLyapSum != null)
+            for (int i = 0; i < pLyapSum.Length; i++) { pLyapSum[i] = 0f; pLyapFrames[i] = 0; }
+        if (particleLyap != null)
+            for (int i = 0; i < particleLyap.Length; i++) particleLyap[i] = 0f;
     }
 
     void ResetParticles()
@@ -100,6 +116,13 @@ public class ThomasAttractor : MonoBehaviour
             pHeads[i] = 0;
             pCounts[i] = 0;
             if (particleTrails[i] != null) particleTrails[i].positionCount = 0;
+            if (particleLyap != null) particleLyap[i] = 0f;
+            if (pRefX != null && i % lyapSampleInterval == 0)
+            {
+                int si = i / lyapSampleInterval;
+                pRefX[si] = px[i] + lyapD0; pRefY[si] = py[i]; pRefZ[si] = pz[i];
+                pLyapSum[si] = 0f; pLyapFrames[si] = 0;
+            }
         }
     }
 
@@ -222,11 +245,49 @@ public class ThomasAttractor : MonoBehaviour
             // Update sphere position
             particleSpheres[i].transform.position = worldPos;
 
-            // Speed → brightness
-            float spd = Mathf.Abs(Mathf.Sin(cy) - b * cx);
-            float hue = (float)i / particleCount;
-            float val = Mathf.Clamp01(0.4f + spd * 0.5f);
-            Color col = Color.HSVToRGB(hue, 1f, val);
+            // Per-particle Lyapunov (sampled)
+            if (particleLyap != null && i % lyapSampleInterval == 0 && pRefX != null)
+            {
+                int si = i / lyapSampleInterval;
+                float rx = pRefX[si], ry = pRefY[si], rz = pRefZ[si];
+                for (int step = 0; step < stepsPerFrame; step++)
+                {
+                    float rdx = Mathf.Sin(ry) - b * rx;
+                    float rdy = Mathf.Sin(rz) - b * ry;
+                    float rdz = Mathf.Sin(rx) - b * rz;
+                    rx += rdx * dt; ry += rdy * dt; rz += rdz * dt;
+                }
+                float sx = rx - cx, sy = ry - cy, sz = rz - cz;
+                float dd = Mathf.Sqrt(sx * sx + sy * sy + sz * sz);
+                if (dd > 0f)
+                {
+                    pLyapSum[si] += Mathf.Log(dd / lyapD0);
+                    pLyapFrames[si]++;
+                    float sc = lyapD0 / dd;
+                    pRefX[si] = cx + sx * sc; pRefY[si] = cy + sy * sc; pRefZ[si] = cz + sz * sc;
+                }
+                if (pLyapFrames[si] >= lyapAvgFrames)
+                {
+                    float lv = pLyapSum[si] / (pLyapFrames[si] * stepsPerFrame * dt);
+                    particleLyap[i] = lv;
+                    for (int n = 1; n < lyapSampleInterval && i + n < particleCount; n++)
+                        particleLyap[i + n] = lv;
+                    pLyapSum[si] = 0f; pLyapFrames[si] = 0;
+                }
+            }
+
+            // Color by per-particle Lyapunov: blue(stable) → red(chaotic)
+            Color col;
+            if (particleLyap != null)
+            {
+                float h = Mathf.Lerp(0.66f, 0f, Mathf.Clamp01(particleLyap[i] / 0.5f));
+                col = Color.HSVToRGB(h, 1f, 1f);
+            }
+            else
+            {
+                float hue = (float)i / particleCount;
+                col = Color.HSVToRGB(hue, 1f, 1f);
+            }
             particleSpheres[i].GetComponent<MeshRenderer>().material.color = col;
 
             // Particle trail
@@ -248,6 +309,21 @@ public class ThomasAttractor : MonoBehaviour
                     pos[j] = pts[(st + j) % trailLength];
                 tlr.SetPositions(pos);
             }
+        }
+
+        // Compute mean/max/min λ
+        if (particleLyap != null)
+        {
+            float sum = 0f, mx = float.MinValue, mn = float.MaxValue;
+            for (int i = 0; i < particleCount; i++)
+            {
+                sum += particleLyap[i];
+                if (particleLyap[i] > mx) mx = particleLyap[i];
+                if (particleLyap[i] < mn) mn = particleLyap[i];
+            }
+            lyapMean = sum / particleCount;
+            lyapMax = mx;
+            lyapMin = mn;
         }
     }
 
@@ -347,8 +423,10 @@ public class ThomasAttractor : MonoBehaviour
 
         if (gripPressed) PlaceInFrontOfCamera();
 
+        float pB = b;
         b = Mathf.Clamp(b + lxIn * (bMax - bMin) * paramSpeed, bMin, bMax);
         dt = Mathf.Clamp(dt + ryIn * 0.1f * paramSpeed, dtMin, dtMax);
+        if (b != pB) ResetLyapunov();
     }
 
     void ToggleMultiMode() { SetMultiMode(!multiMode); }
@@ -397,11 +475,25 @@ public class ThomasAttractor : MonoBehaviour
         pHeads = new int[particleCount];
         pCounts = new int[particleCount];
 
+        int sampleCount = (particleCount + lyapSampleInterval - 1) / lyapSampleInterval;
+        pRefX = new float[sampleCount];
+        pRefY = new float[sampleCount];
+        pRefZ = new float[sampleCount];
+        pLyapSum = new float[sampleCount];
+        pLyapFrames = new int[sampleCount];
+        particleLyap = new float[particleCount];
+
         for (int i = 0; i < particleCount; i++)
         {
             px[i] = 0.1f + Random.Range(-scatterRange, scatterRange);
             py[i] = Random.Range(-scatterRange, scatterRange);
             pz[i] = Random.Range(-scatterRange, scatterRange);
+
+            if (i % lyapSampleInterval == 0)
+            {
+                int si = i / lyapSampleInterval;
+                pRefX[si] = px[i] + lyapD0; pRefY[si] = py[i]; pRefZ[si] = pz[i];
+            }
 
             float hue = (float)i / particleCount;
             Color col = Color.HSVToRGB(hue, 1f, 1f);
@@ -447,6 +539,8 @@ public class ThomasAttractor : MonoBehaviour
         pTrailPts = null;
         pHeads = null;
         pCounts = null;
+        pRefX = null; pRefY = null; pRefZ = null;
+        pLyapSum = null; pLyapFrames = null; particleLyap = null;
     }
 
     public string GetParamLabel()
