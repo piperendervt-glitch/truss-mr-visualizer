@@ -120,8 +120,8 @@ public class ShapeManager : MonoBehaviour
         if (aLong) CycleBgMode();
         if (aShort)
         {
-            var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
-            var lorenz = activeShape != null ? activeShape.GetComponent<LorenzAttractor>() : null;
+            var currentActiveShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
+            var lorenz = currentActiveShape != null ? currentActiveShape.GetComponent<LorenzAttractor>() : null;
             if (lorenz != null)
                 lorenz.ResetTrail();
             else if (rotationSnapshot != null)
