@@ -13,7 +13,6 @@ public class DebugDisplay : MonoBehaviour
     public int activeIndex;
 
     bool visible = true; // default ON for testing
-    bool prevYButton;
     GameObject canvasGo;
     TextMeshProUGUI debugTMP;
 
@@ -74,29 +73,11 @@ public class DebugDisplay : MonoBehaviour
         var kb = Keyboard.current;
         if (kb != null && kb.fKey.wasPressedThisFrame) toggleDown = true;
 #else
-        // Try multiple methods to detect Y button on Quest 3
-        // Method 1: Input System XRController secondaryButton on left hand
         var leftCtrl = XRController.leftHand;
         if (leftCtrl != null)
         {
-            var yBtn = leftCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
-            if (yBtn != null)
-            {
-                bool p = yBtn.isPressed;
-                if (p && !prevYButton) toggleDown = true;
-                prevYButton = p;
-            }
-        }
-
-        // Method 2: OVRInput fallback
-        if (!toggleDown)
-        {
-            try
-            {
-                if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch))
-                    toggleDown = true;
-            }
-            catch { }
+            var btn = leftCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
+            if (btn != null && btn.wasPressedThisFrame) toggleDown = true;
         }
 #endif
 
