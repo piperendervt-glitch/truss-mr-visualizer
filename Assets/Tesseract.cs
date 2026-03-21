@@ -93,12 +93,15 @@ public class Tesseract : MonoBehaviour
         faceIndices = list.ToArray();
     }
 
-    // --- Translucent face mesh (URP Transparent, Cull Off) ---
+    // --- Translucent face mesh (Sprites/Default: alpha-blend + double-sided built-in) ---
     void SetupFaceMesh()
     {
         int faceCount = faceIndices.Length; // 24
         meshVerts = new Vector3[faceCount * 4];
         int[] tris = new int[faceCount * 6];
+        Color[] colors = new Color[faceCount * 4];
+
+        var faceColor = new Color(0f, 0.85f, 1f, 0.35f);
 
         for (int f = 0; f < faceCount; f++)
         {
@@ -108,11 +111,16 @@ public class Tesseract : MonoBehaviour
             tris[f * 6 + 3] = f * 4 + 0;
             tris[f * 6 + 4] = f * 4 + 2;
             tris[f * 6 + 5] = f * 4 + 3;
+            colors[f * 4 + 0] = faceColor;
+            colors[f * 4 + 1] = faceColor;
+            colors[f * 4 + 2] = faceColor;
+            colors[f * 4 + 3] = faceColor;
         }
 
         faceMesh = new Mesh();
         faceMesh.vertices = meshVerts;
         faceMesh.triangles = tris;
+        faceMesh.colors = colors;
 
         var go = new GameObject("faces");
         go.transform.SetParent(transform, false);
@@ -120,21 +128,12 @@ public class Tesseract : MonoBehaviour
         go.AddComponent<MeshFilter>().mesh = faceMesh;
         var mr = go.AddComponent<MeshRenderer>();
 
-        // URP Unlit, Transparent, Double-sided
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Sprites/Default");
-        var mat = new Material(shader);
-        mat.SetFloat("_Surface", 1f);     // Transparent
-        mat.SetFloat("_Blend", 0f);       // Alpha blend
-        mat.SetFloat("_Cull", (float)CullMode.Off);
-        mat.SetFloat("_ZWrite", 0f);
-        mat.SetFloat("_AlphaClip", 0f);
-        mat.SetColor("_BaseColor", new Color(0f, 0.85f, 1f, 0.35f));
-        mat.SetOverrideTag("RenderType", "Transparent");
+        // Sprites/Default: always available, alpha-blend + double-sided built-in,
+        // never stripped by shader variant stripping.
+        // Uses vertex color * _Color, so transparency works out of the box.
+        var mat = new Material(Shader.Find("Sprites/Default"));
+        mat.color = Color.white; // vertex color drives the actual tint
         mat.renderQueue = (int)RenderQueue.Transparent;
-        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        mat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-        mat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
         mr.material = mat;
     }
 
