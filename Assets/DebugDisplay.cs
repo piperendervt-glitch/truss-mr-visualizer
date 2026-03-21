@@ -143,6 +143,11 @@ public class DebugDisplay : MonoBehaviour
             {
                 shapeName = "LorenzAttractor";
             }
+            var thomas = activeShape.GetComponent<ThomasAttractor>();
+            if (thomas != null)
+            {
+                shapeName = "ThomasAttractor";
+            }
             var dodeca = activeShape.GetComponent<Dodecaplex>();
             if (dodeca != null)
             {
@@ -155,14 +160,20 @@ public class DebugDisplay : MonoBehaviour
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
 
-        // Lorenz-specific debug info
+        // Attractor-specific debug info
         if (activeShape != null)
         {
             var lorenz = activeShape.GetComponent<LorenzAttractor>();
+            var thomasDbg = activeShape.GetComponent<ThomasAttractor>();
             if (lorenz != null)
             {
                 sb.AppendLine($"Shape: {shapeName}  dt:{lorenz.dt:F3}");
                 sb.AppendLine($"\u03c3:{lorenz.sigma:F1}  \u03c1:{lorenz.rho:F1}  \u03b2:{lorenz.beta:F2}");
+            }
+            else if (thomasDbg != null)
+            {
+                sb.AppendLine($"Shape: {shapeName}  dt:{thomasDbg.dt:F3}");
+                sb.AppendLine($"b:{thomasDbg.b:F3}");
             }
             else
             {

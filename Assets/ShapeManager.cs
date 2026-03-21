@@ -23,7 +23,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron", "LorenzAttractor", "Dodecaplex" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor" };
 
     // Grid
     GameObject gridRoot;
@@ -122,8 +122,11 @@ public class ShapeManager : MonoBehaviour
         {
             var currentActiveShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
             var lorenz = currentActiveShape != null ? currentActiveShape.GetComponent<LorenzAttractor>() : null;
+            var thomas = currentActiveShape != null ? currentActiveShape.GetComponent<ThomasAttractor>() : null;
             if (lorenz != null)
                 lorenz.ResetTrail();
+            else if (thomas != null)
+                thomas.ResetTrail();
             else if (rotationSnapshot != null)
                 rotationSnapshot.SaveToCurrentSlot();
         }
@@ -285,6 +288,9 @@ public class ShapeManager : MonoBehaviour
         var dodeca = shapes[currentIndex].GetComponent<Dodecaplex>();
         if (dodeca != null) return Dodecaplex.speedNames[dodeca.speedLevel];
 
+        var thomas = shapes[currentIndex].GetComponent<ThomasAttractor>();
+        if (thomas != null) return $"dt:{thomas.dt:F3}";
+
         return "Normal";
     }
 
@@ -304,6 +310,9 @@ public class ShapeManager : MonoBehaviour
 
         var dodeca = shapes[currentIndex].GetComponent<Dodecaplex>();
         if (dodeca != null) return dodeca.GetPairLabel();
+
+        var thomas = shapes[currentIndex].GetComponent<ThomasAttractor>();
+        if (thomas != null) return thomas.GetParamLabel();
 
         return "";
     }
