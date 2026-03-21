@@ -12,9 +12,17 @@ public class ShapeManager : MonoBehaviour
     TextMeshPro label;
     bool prevButton;
     bool prevAButton;
-    bool isMR = true;
 
+    // Background mode: 0=MR, 1=VR Black, 2=VR Grid
+    int bgMode;
+    string[] bgModeNames = { "MR", "VR Black", "VR Grid" };
     string[] shapeNames = { "Tesseract", "Hexadecachoron" };
+
+    // Grid
+    GameObject gridRoot;
+    const int gridHalf = 10;       // ±10 lines = 20m span
+    const float gridSpacing = 0.5f;
+    static readonly Color gridColor = new Color(0.6f, 0.7f, 1f, 0.3f);
 
     void Start()
     {
@@ -32,6 +40,8 @@ public class ShapeManager : MonoBehaviour
             if (shapes[i] != null)
                 shapes[i].SetActive(i == currentIndex);
 
+        BuildGrid();
+        ApplyBgMode();
         UpdateLabel();
     }
 
@@ -48,7 +58,7 @@ public class ShapeManager : MonoBehaviour
             if (kb.tabKey.wasPressedThisFrame) aButtonDown = true;
         }
 #else
-        // Quest 3: B button = shape switch, A button = MR/VR toggle
+        // Quest 3: B button = shape switch, A button = background mode
         var rightCtrl = XRController.rightHand;
         if (rightCtrl != null)
         {
@@ -71,7 +81,7 @@ public class ShapeManager : MonoBehaviour
 #endif
 
         if (buttonDown) SwitchToNext();
-        if (aButtonDown) ToggleMRVR();
+        if (aButtonDown) CycleBgMode();
 
         // Position label below the active shape, billboard toward camera
         var activeShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
@@ -80,10 +90,20 @@ public class ShapeManager : MonoBehaviour
         {
             label.transform.position = activeShape.transform.position + Vector3.down * 0.2f;
             label.transform.LookAt(cam.transform);
-            label.transform.Rotate(0f, 180f, 0f); // LookAt faces away, flip to face camera
+            label.transform.Rotate(0f, 180f, 0f);
+        }
+
+        // Keep grid centered on camera (XZ snapped to grid spacing)
+        if (gridRoot != null && gridRoot.activeSelf && cam != null)
+        {
+            Vector3 cp = cam.transform.position;
+            float sx = Mathf.Round(cp.x / gridSpacing) * gridSpacing;
+            float sz = Mathf.Round(cp.z / gridSpacing) * gridSpacing;
+            gridRoot.transform.position = new Vector3(sx, 0f, sz);
         }
     }
 
+    // --- Shape switching ---
     void SwitchToNext()
     {
         if (shapes == null || shapes.Length == 0) return;
@@ -99,30 +119,100 @@ public class ShapeManager : MonoBehaviour
         UpdateLabel();
     }
 
-    void ToggleMRVR()
+    // --- Background mode cycling ---
+    void CycleBgMode()
     {
-        isMR = !isMR;
-        var cam = Camera.main;
-
-        if (isMR)
-        {
-            if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
-            if (passthroughLayer != null) passthroughLayer.SetActive(true);
-        }
-        else
-        {
-            if (cam != null) cam.backgroundColor = Color.black;
-            if (passthroughLayer != null) passthroughLayer.SetActive(false);
-        }
-
+        bgMode = (bgMode + 1) % bgModeNames.Length;
+        ApplyBgMode();
         UpdateLabel();
     }
 
+    void ApplyBgMode()
+    {
+        var cam = Camera.main;
+
+        switch (bgMode)
+        {
+            case 0: // MR
+                if (cam != null) cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+                if (passthroughLayer != null) passthroughLayer.SetActive(true);
+                if (gridRoot != null) gridRoot.SetActive(false);
+                break;
+            case 1: // VR Black
+                if (cam != null) cam.backgroundColor = Color.black;
+                if (passthroughLayer != null) passthroughLayer.SetActive(false);
+                if (gridRoot != null) gridRoot.SetActive(false);
+                break;
+            case 2: // VR Grid
+                if (cam != null) cam.backgroundColor = new Color(0.05f, 0.05f, 0.15f, 1f);
+                if (passthroughLayer != null) passthroughLayer.SetActive(false);
+                if (gridRoot != null) gridRoot.SetActive(true);
+                break;
+        }
+    }
+
+    // --- Grid construction ---
+    void BuildGrid()
+    {
+        gridRoot = new GameObject("VRGrid");
+        gridRoot.transform.SetParent(transform, false);
+        gridRoot.SetActive(false);
+
+        var mat = new Material(Shader.Find("Sprites/Default"));
+
+        float extent = gridHalf * gridSpacing;
+
+        // Horizontal plane (XZ) — lines along X and Z
+        for (int i = -gridHalf; i <= gridHalf; i++)
+        {
+            float offset = i * gridSpacing;
+            // Line along Z
+            CreateGridLine(mat,
+                new Vector3(offset, 0f, -extent),
+                new Vector3(offset, 0f, extent));
+            // Line along X
+            CreateGridLine(mat,
+                new Vector3(-extent, 0f, offset),
+                new Vector3(extent, 0f, offset));
+        }
+
+        // Vertical plane (XY at Z=0) — lines along X and Y
+        for (int i = -gridHalf; i <= gridHalf; i++)
+        {
+            float offset = i * gridSpacing;
+            // Line along Y
+            CreateGridLine(mat,
+                new Vector3(offset, -extent, 0f),
+                new Vector3(offset, extent, 0f));
+            // Line along X
+            CreateGridLine(mat,
+                new Vector3(-extent, offset, 0f),
+                new Vector3(extent, offset, 0f));
+        }
+    }
+
+    void CreateGridLine(Material mat, Vector3 a, Vector3 b)
+    {
+        var go = new GameObject("gline");
+        go.transform.SetParent(gridRoot.transform, false);
+        var lr = go.AddComponent<LineRenderer>();
+        lr.positionCount = 2;
+        lr.SetPosition(0, a);
+        lr.SetPosition(1, b);
+        lr.startWidth = 0.005f;
+        lr.endWidth = 0.005f;
+        lr.useWorldSpace = false;
+        lr.material = mat;
+        lr.startColor = gridColor;
+        lr.endColor = gridColor;
+    }
+
+    // --- Label ---
     void UpdateLabel()
     {
         if (label == null) return;
         string name = currentIndex < shapeNames.Length ? shapeNames[currentIndex] : "Shape";
-        string mode = isMR ? "MR" : "VR";
+        string mode = bgMode < bgModeNames.Length ? bgModeNames[bgMode] : "?";
         label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]";
     }
 }
