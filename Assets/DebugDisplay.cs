@@ -29,7 +29,8 @@ public class DebugDisplay : MonoBehaviour
         debugLabel.alignment = TextAlignmentOptions.TopLeft;
         debugLabel.color = Color.white;
         debugLabel.rectTransform.sizeDelta = new Vector2(6f, 4f);
-        debugLabel.gameObject.SetActive(false);
+        debugLabel.gameObject.SetActive(true);
+        visible = true;
     }
 
     void Update()
@@ -71,17 +72,17 @@ public class DebugDisplay : MonoBehaviour
             fpsTimer = 0f;
         }
 
-        // Position: camera-fixed, upper-left
+        // Position: camera-fixed, upper-left, billboard
         GameObject activeShape = GetActiveShape();
         var cam = Camera.main;
         if (cam != null)
         {
-            Vector3 fwd = cam.transform.forward;
-            Vector3 right = cam.transform.right;
-            Vector3 up = cam.transform.up;
             debugLabel.transform.position = cam.transform.position
-                + fwd * 0.8f + up * 0.15f - right * 0.25f;
-            debugLabel.transform.rotation = Quaternion.LookRotation(fwd, up);
+                + cam.transform.forward * 0.6f
+                + cam.transform.up * 0.10f
+                + cam.transform.right * -0.15f;
+            debugLabel.transform.LookAt(cam.transform.position);
+            debugLabel.transform.Rotate(0f, 180f, 0f);
         }
 
         // Build debug text
