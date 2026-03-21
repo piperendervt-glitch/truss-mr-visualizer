@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
-using TMPro;
 
 public class DebugDisplay : MonoBehaviour
 {
@@ -11,27 +10,17 @@ public class DebugDisplay : MonoBehaviour
     public RotationSnapshot rotationSnapshot;
     public int activeIndex;
 
-    TextMeshPro debugLabel;
-    bool visible;
+    bool visible = true;
     bool prevYButton;
+    string debugText = "";
 
     // FPS
     int frameCount;
     float fpsTimer;
     float currentFps;
 
-    void Start()
-    {
-        var go = new GameObject("DebugLabel");
-        go.transform.SetParent(transform, false);
-        debugLabel = go.AddComponent<TextMeshPro>();
-        debugLabel.fontSize = 0.08f;
-        debugLabel.alignment = TextAlignmentOptions.TopLeft;
-        debugLabel.color = Color.white;
-        debugLabel.rectTransform.sizeDelta = new Vector2(6f, 4f);
-        debugLabel.gameObject.SetActive(true);
-        visible = true;
-    }
+    // GUI style (created once)
+    GUIStyle guiStyle;
 
     void Update()
     {
@@ -54,12 +43,7 @@ public class DebugDisplay : MonoBehaviour
         }
 #endif
 
-        if (toggleDown)
-        {
-            visible = !visible;
-            debugLabel.gameObject.SetActive(visible);
-        }
-
+        if (toggleDown) visible = !visible;
         if (!visible) return;
 
         // FPS
@@ -72,24 +56,11 @@ public class DebugDisplay : MonoBehaviour
             fpsTimer = 0f;
         }
 
-        // Position: camera-fixed, upper-left, billboard
-        GameObject activeShape = GetActiveShape();
-        var cam = Camera.main;
-        if (cam != null)
-        {
-            debugLabel.transform.position = cam.transform.position
-                + cam.transform.forward * 0.6f
-                + cam.transform.up * 0.10f
-                + cam.transform.right * -0.15f;
-            debugLabel.transform.LookAt(cam.transform.position);
-            debugLabel.transform.Rotate(0f, 180f, 0f);
-        }
-
         // Build debug text
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"FPS: {currentFps:F1}");
 
-        // Shape info
+        GameObject activeShape = GetActiveShape();
         string shapeName = "?";
         float[] angles = null;
         int speedLevel = 1;
@@ -118,7 +89,6 @@ public class DebugDisplay : MonoBehaviour
         string[] speedNames = { "Slow", "Normal", "Fast" };
         sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
 
-        // Angles
         if (angles != null && planeNames != null)
         {
             sb.Append("Angles: ");
@@ -130,7 +100,6 @@ public class DebugDisplay : MonoBehaviour
             sb.AppendLine();
         }
 
-        // Axis distances
         if (axisDisplay != null)
         {
             sb.Append("Axis dist: ");
@@ -140,11 +109,30 @@ public class DebugDisplay : MonoBehaviour
             sb.AppendLine();
         }
 
-        // Snapshot
         if (rotationSnapshot != null)
             sb.AppendLine(rotationSnapshot.GetSlotDisplay());
 
-        debugLabel.text = sb.ToString();
+        debugText = sb.ToString();
+    }
+
+    void OnGUI()
+    {
+        if (!visible) return;
+
+        if (guiStyle == null)
+        {
+            guiStyle = new GUIStyle(GUI.skin.label);
+            guiStyle.fontSize = 24;
+            guiStyle.normal.textColor = Color.white;
+            guiStyle.wordWrap = true;
+        }
+
+        // Semi-transparent background
+        GUI.color = new Color(0f, 0f, 0f, 0.5f);
+        GUI.DrawTexture(new Rect(10, 10, 500, 220), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+
+        GUI.Label(new Rect(15, 15, 490, 210), debugText, guiStyle);
     }
 
     GameObject GetActiveShape()
