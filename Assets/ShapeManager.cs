@@ -65,9 +65,9 @@ public class ShapeManager : MonoBehaviour
             Vector3 right = cam.transform.right;
             Vector3 up = cam.transform.up;
             label.transform.position = cam.transform.position
-                + fwd * 0.5f
-                + up * 0.18f
-                - right * 0.22f;
+                + fwd * 0.8f
+                + up * 0.10f
+                - right * 0.12f;
             label.transform.rotation = Quaternion.LookRotation(fwd, up);
         }
     }
