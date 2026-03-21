@@ -8,7 +8,7 @@ public class Tesseract : MonoBehaviour
 {
     Vector4[] verts4D = new Vector4[16];
     Vector3[] localVerts = new Vector3[16]; // local offsets from transform.position
-    float size = 0.15f;
+    float size = 0.10f;
     float angleXW, angleZW, angleXY, angleYW;
 
     // Faces (24 quads, each defined by 4 vertex indices)

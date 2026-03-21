@@ -9,7 +9,7 @@ public class Hexadecachoron : MonoBehaviour
     // 16-cell: 8 vertices, 24 edges, 32 triangular faces
     Vector4[] verts4D = new Vector4[8];
     Vector3[] localVerts = new Vector3[8]; // local offsets from transform.position
-    float size = 0.15f;
+    float size = 0.10f;
     float angleXW, angleZW, angleXY, angleYW;
 
     int[][] faceIndices; // 32 triangles, each 3 vertex indices
