@@ -19,10 +19,10 @@ public class ShapeManager : MonoBehaviour
         var labelGo = new GameObject("ShapeLabel");
         labelGo.transform.SetParent(transform, false);
         label = labelGo.AddComponent<TextMeshPro>();
-        label.fontSize = 0.05f;
+        label.fontSize = 0.08f;
         label.alignment = TextAlignmentOptions.Center;
         label.color = Color.cyan;
-        label.rectTransform.sizeDelta = new Vector2(0.5f, 0.1f);
+        label.rectTransform.sizeDelta = new Vector2(1.0f, 0.2f);
 
         // Activate first shape, deactivate others
         for (int i = 0; i < shapes.Length; i++)
