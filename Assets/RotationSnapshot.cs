@@ -48,6 +48,9 @@ public class RotationSnapshot : MonoBehaviour
         var hexa = shape.GetComponent<Hexadecachoron>();
         if (hexa != null) return hexa.GetAngles();
 
+        var dodeca = shape.GetComponent<Dodecaplex>();
+        if (dodeca != null) return dodeca.GetAngles();
+
         return null;
     }
 
@@ -58,6 +61,9 @@ public class RotationSnapshot : MonoBehaviour
 
         var hexa = shape.GetComponent<Hexadecachoron>();
         if (hexa != null) { hexa.SetAngles(a); return; }
+
+        var dodeca = shape.GetComponent<Dodecaplex>();
+        if (dodeca != null) { dodeca.SetAngles(a); return; }
     }
 
     GameObject GetActiveShape()

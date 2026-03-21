@@ -143,6 +143,14 @@ public class DebugDisplay : MonoBehaviour
             {
                 shapeName = "LorenzAttractor";
             }
+            var dodeca = activeShape.GetComponent<Dodecaplex>();
+            if (dodeca != null)
+            {
+                shapeName = "Dodecaplex";
+                angles = dodeca.GetAngles();
+                speedLevel = dodeca.speedLevel;
+                planeNames = Dodecaplex.planeNames;
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };

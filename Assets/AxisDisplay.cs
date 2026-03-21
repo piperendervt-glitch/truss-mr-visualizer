@@ -243,6 +243,14 @@ public class AxisDisplay : MonoBehaviour
             hexa.overridePlanes = new int[] { planeA, planeB };
             hexa.planesOverridden = true;
         }
+
+        var dodeca = shape.GetComponent<Dodecaplex>();
+        if (dodeca != null)
+        {
+            if (savedLeftPair < 0) savedLeftPair = dodeca.currentLeftPair;
+            dodeca.overridePlanes = new int[] { planeA, planeB };
+            dodeca.planesOverridden = true;
+        }
     }
 
     void RestoreLeftPair(GameObject shape)
@@ -259,6 +267,13 @@ public class AxisDisplay : MonoBehaviour
         {
             hexa.planesOverridden = false;
             if (savedLeftPair >= 0) hexa.currentLeftPair = savedLeftPair;
+        }
+
+        var dodeca = shape.GetComponent<Dodecaplex>();
+        if (dodeca != null)
+        {
+            dodeca.planesOverridden = false;
+            if (savedLeftPair >= 0) dodeca.currentLeftPair = savedLeftPair;
         }
 
         savedLeftPair = -1;
