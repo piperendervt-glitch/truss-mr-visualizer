@@ -35,6 +35,10 @@ public class Tesseract : MonoBehaviour
     public int currentRightPair;
     bool prevLeftClick, prevRightClick;
 
+    // Axis proximity override
+    [HideInInspector] public bool planesOverridden;
+    [HideInInspector] public int[] overridePlanes; // [0]=stickX plane, [1]=stickY plane
+
     int[][] faceIndices;
     Mesh faceMesh;
     Vector3[] meshVerts;
@@ -67,7 +71,8 @@ public class Tesseract : MonoBehaviour
 
     public string GetPairLabel()
     {
-        var lp = leftPairs[currentLeftPair];
+        int[] lp = planesOverridden && overridePlanes != null
+            ? overridePlanes : leftPairs[currentLeftPair];
         var rp = rightPairs[currentRightPair];
         return $"L:{planeNames[lp[0]]}/{planeNames[lp[1]]}  R:{planeNames[rp[0]]}/{planeNames[rp[1]]}";
     }
@@ -257,7 +262,8 @@ public class Tesseract : MonoBehaviour
         if (gripPressed) PlaceInFrontOfCamera();
 
         // Apply stick input to selected rotation planes
-        var lp = leftPairs[currentLeftPair];
+        int[] lp = planesOverridden && overridePlanes != null
+            ? overridePlanes : leftPairs[currentLeftPair];
         var rp = rightPairs[currentRightPair];
         angles[lp[0]] += lx * speed;
         angles[lp[1]] += ly * speed;

@@ -8,6 +8,7 @@ public class ShapeManager : MonoBehaviour
 {
     public GameObject[] shapes;
     public GameObject passthroughLayer; // OVRPassthroughLayer GameObject
+    public AxisDisplay axisDisplay;
     int currentIndex;
     TextMeshPro label;
     bool prevButton;
@@ -119,6 +120,8 @@ public class ShapeManager : MonoBehaviour
         if (shapes[currentIndex] != null)
             shapes[currentIndex].SetActive(true);
 
+        if (axisDisplay != null) axisDisplay.activeIndex = currentIndex;
+
         UpdateLabel();
     }
 
@@ -210,7 +213,10 @@ public class ShapeManager : MonoBehaviour
         string name = currentIndex < shapeNames.Length ? shapeNames[currentIndex] : "Shape";
         string mode = bgMode < bgModeNames.Length ? bgModeNames[bgMode] : "?";
         string pairLabel = GetActivePairLabel();
-        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]\n{pairLabel}";
+        string axisInfo = axisDisplay != null ? axisDisplay.GetSelectedAxisName() : "";
+        string line2 = string.IsNullOrEmpty(axisInfo)
+            ? pairLabel : $"{pairLabel}  {axisInfo}";
+        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]\n{line2}";
     }
 
     string GetActivePairLabel()

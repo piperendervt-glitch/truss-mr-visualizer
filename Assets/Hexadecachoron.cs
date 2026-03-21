@@ -26,6 +26,10 @@ public class Hexadecachoron : MonoBehaviour
     public int currentRightPair;
     bool prevLeftClick, prevRightClick;
 
+    // Axis proximity override
+    [HideInInspector] public bool planesOverridden;
+    [HideInInspector] public int[] overridePlanes;
+
     int[][] faceIndices;
     Mesh faceMesh;
     Vector3[] meshVerts;
@@ -60,7 +64,8 @@ public class Hexadecachoron : MonoBehaviour
 
     public string GetPairLabel()
     {
-        var lp = leftPairs[currentLeftPair];
+        int[] lp = planesOverridden && overridePlanes != null
+            ? overridePlanes : leftPairs[currentLeftPair];
         var rp = rightPairs[currentRightPair];
         return $"L:{planeNames[lp[0]]}/{planeNames[lp[1]]}  R:{planeNames[rp[0]]}/{planeNames[rp[1]]}";
     }
@@ -229,7 +234,8 @@ public class Hexadecachoron : MonoBehaviour
 
         if (gripPressed) PlaceInFrontOfCamera();
 
-        var lp = leftPairs[currentLeftPair];
+        int[] lp = planesOverridden && overridePlanes != null
+            ? overridePlanes : leftPairs[currentLeftPair];
         var rp = rightPairs[currentRightPair];
         angles[lp[0]] += lx * speed;
         angles[lp[1]] += ly * speed;
