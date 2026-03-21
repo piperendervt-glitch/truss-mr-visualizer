@@ -33,7 +33,15 @@ public class Tesseract : MonoBehaviour
 
     public int currentLeftPair;
     public int currentRightPair;
-    bool prevLeftClick, prevRightClick;
+    bool prevLeftClick, prevRightClick, prevDpadLeft, prevDpadRight;
+
+    // Speed control: 0=Slow, 1=Normal, 2=Fast
+    public int speedLevel = 1;
+    static readonly float[] speedValues = { 0.5f, 1.5f, 3.0f };
+    public static readonly string[] speedNames = { "Slow", "Normal", "Fast" };
+
+    public float[] GetAngles() { return (float[])angles.Clone(); }
+    public void SetAngles(float[] a) { if (a != null && a.Length == 6) System.Array.Copy(a, angles, 6); }
 
     // Axis proximity override
     [HideInInspector] public bool planesOverridden;
@@ -196,7 +204,7 @@ public class Tesseract : MonoBehaviour
         var grabber = GetComponent<ShapeGrabber>();
         bool grabbed = grabber != null && grabber.isGrabbed;
 
-        float speed = 1.5f * Time.deltaTime;
+        float speed = speedValues[speedLevel] * Time.deltaTime;
         float lx = 0f, ly = 0f, rx = 0f, ry = 0f;
         bool gripPressed = false;
         bool leftClickDown = false, rightClickDown = false;
@@ -218,6 +226,9 @@ public class Tesseract : MonoBehaviour
             if (kb.gKey.wasPressedThisFrame) gripPressed = true;
             if (kb.qKey.wasPressedThisFrame) leftClickDown = true;
             if (kb.eKey.wasPressedThisFrame) rightClickDown = true;
+            if (kb.digit1Key.wasPressedThisFrame) speedLevel = 0;
+            if (kb.digit2Key.wasPressedThisFrame) speedLevel = 1;
+            if (kb.digit3Key.wasPressedThisFrame) speedLevel = 2;
         }
 #else
         var leftCtrl = XRController.leftHand;
@@ -250,6 +261,22 @@ public class Tesseract : MonoBehaviour
                 bool p = rClick.isPressed;
                 if (p && !prevRightClick) rightClickDown = true;
                 prevRightClick = p;
+            }
+
+            // Dpad left/right via left controller thumbstick X for speed
+        }
+
+        if (leftCtrl != null)
+        {
+            var lstick = leftCtrl.TryGetChildControl<StickControl>("thumbstick");
+            if (lstick != null)
+            {
+                bool dL = lstick.x.ReadValue() < -0.8f;
+                bool dR = lstick.x.ReadValue() > 0.8f;
+                if (dL && !prevDpadLeft && speedLevel > 0) speedLevel--;
+                if (dR && !prevDpadRight && speedLevel < 2) speedLevel++;
+                prevDpadLeft = dL;
+                prevDpadRight = dR;
             }
         }
 #endif

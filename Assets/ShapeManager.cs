@@ -9,6 +9,8 @@ public class ShapeManager : MonoBehaviour
     public GameObject[] shapes;
     public GameObject passthroughLayer; // OVRPassthroughLayer GameObject
     public AxisDisplay axisDisplay;
+    public DebugDisplay debugDisplay;
+    public RotationSnapshot rotationSnapshot;
     int currentIndex;
     TextMeshPro label;
     bool prevButton;
@@ -121,6 +123,8 @@ public class ShapeManager : MonoBehaviour
             shapes[currentIndex].SetActive(true);
 
         if (axisDisplay != null) axisDisplay.activeIndex = currentIndex;
+        if (debugDisplay != null) debugDisplay.activeIndex = currentIndex;
+        if (rotationSnapshot != null) rotationSnapshot.activeIndex = currentIndex;
 
         UpdateLabel();
     }
@@ -212,11 +216,26 @@ public class ShapeManager : MonoBehaviour
         if (label == null) return;
         string name = currentIndex < shapeNames.Length ? shapeNames[currentIndex] : "Shape";
         string mode = bgMode < bgModeNames.Length ? bgModeNames[bgMode] : "?";
+        string speedName = GetActiveSpeedName();
         string pairLabel = GetActivePairLabel();
         string axisInfo = axisDisplay != null ? axisDisplay.GetSelectedAxisName() : "";
         string line2 = string.IsNullOrEmpty(axisInfo)
             ? pairLabel : $"{pairLabel}  {axisInfo}";
-        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}]\n{line2}";
+        label.text = $"{name} ({currentIndex + 1}/{shapes.Length}) [{mode}] [{speedName}]\n{line2}";
+    }
+
+    string GetActiveSpeedName()
+    {
+        if (shapes == null || currentIndex >= shapes.Length || shapes[currentIndex] == null)
+            return "Normal";
+
+        var tess = shapes[currentIndex].GetComponent<Tesseract>();
+        if (tess != null) return Tesseract.speedNames[tess.speedLevel];
+
+        var hexa = shapes[currentIndex].GetComponent<Hexadecachoron>();
+        if (hexa != null) return Hexadecachoron.speedNames[hexa.speedLevel];
+
+        return "Normal";
     }
 
     string GetActivePairLabel()

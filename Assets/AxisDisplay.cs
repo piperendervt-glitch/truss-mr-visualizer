@@ -48,6 +48,9 @@ public class AxisDisplay : MonoBehaviour
     public int selectedAxis = -1; // -1=none, 0=X,1=Y,2=Z,3=W
     int axisPlaneCycleIndex;
     float blinkTimer;
+    float[] axisDists = new float[4];
+
+    public float GetAxisDistance(int i) { return (i >= 0 && i < 4) ? axisDists[i] : float.MaxValue; }
 
     // Saved pair to restore
     int savedLeftPair = -1;
@@ -128,6 +131,7 @@ public class AxisDisplay : MonoBehaviour
             // Distance from controller to axis midpoint
             Vector3 axisMid = (axisStart + axisEnd) * 0.5f;
             float dist = Vector3.Distance(ctrlPos, axisMid);
+            axisDists[i] = dist;
 
             if (dist < closestDist && dist < highlightDist)
             {
