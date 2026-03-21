@@ -154,10 +154,16 @@ public class Hexadecachoron : MonoBehaviour
             placedOnStart = true;
         }
 
+        // Pause 4D rotation while grabbed
+        var grabber = GetComponent<ShapeGrabber>();
+        bool grabbed = grabber != null && grabber.isGrabbed;
+
         float speed = 1.5f * Time.deltaTime;
         float lx = 0f, ly = 0f, rx = 0f, ry = 0f;
         bool gripPressed = false;
 
+        if (!grabbed)
+        {
 #if UNITY_EDITOR
         var kb = Keyboard.current;
         if (kb != null)
@@ -191,6 +197,7 @@ public class Hexadecachoron : MonoBehaviour
             if (stick != null) { rx = stick.x.ReadValue(); ry = stick.y.ReadValue(); }
         }
 #endif
+        } // end if (!grabbed)
 
         // B: Reposition on grip press
         if (gripPressed) PlaceInFrontOfCamera();

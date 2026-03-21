@@ -3860,6 +3860,7 @@ GameObject:
   m_Component:
   - component: {fileID: 800000002}
   - component: {fileID: 800000003}
+  - component: {fileID: 800000004}
   m_Layer: 0
   m_Name: Tesseract
   m_TagString: Untagged
@@ -3894,6 +3895,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caad65d038fa60446af84709e134a4e0, type: 3}
   m_Name:
   m_EditorClassIdentifier:
+--- !u!114 &800000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 800000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e65f25c3e0a4e58ae8428a991fbc715, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
 --- !u!1 &900000001
 GameObject:
   m_ObjectHideFlags: 0
@@ -3904,6 +3917,7 @@ GameObject:
   m_Component:
   - component: {fileID: 900000002}
   - component: {fileID: 900000003}
+  - component: {fileID: 900000004}
   m_Layer: 0
   m_Name: Hexadecachoron
   m_TagString: Untagged
@@ -3936,6 +3950,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5cf2f7b431094f0989e4589b8e8b0fae, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+--- !u!114 &900000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 900000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e65f25c3e0a4e58ae8428a991fbc715, type: 3}
   m_Name:
   m_EditorClassIdentifier:
 --- !u!1 &700000001
