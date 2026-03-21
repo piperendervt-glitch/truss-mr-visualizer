@@ -16,7 +16,7 @@ public class ThomasAttractor : MonoBehaviour
     // Trail
     const int maxPoints = 2000;
     const int stepsPerFrame = 5;
-    const float thomasScale = 0.05f; // ~0.3m total (attractor spans ~[-3,3])
+    const float thomasScale = 0.05f;
 
     Vector3[] trailPoints;
     float[] speeds;
@@ -28,6 +28,26 @@ public class ThomasAttractor : MonoBehaviour
 
     LineRenderer lr;
     bool placedOnStart;
+
+    // Multi-particle mode
+    const int particleCount = 200;
+    const int particleTrailMax = 100;
+    const float particleRadius = 0.003f;
+    const float scatterRange = 0.1f;
+    const float multiLongPress = 1.0f;
+
+    public bool multiMode;
+    float yHoldTime;
+    bool yWasPressed, yLongFired;
+
+    float[] px, py, pz;
+    GameObject[] particleSpheres;
+    LineRenderer[] particleTrails;
+    Vector3[][] pTrailPts;
+    int[] pHeads, pCounts;
+    GameObject multiRoot;
+    Mesh sharedSphereMesh;
+    Material sharedSphereMat;
 
     void Start()
     {
@@ -52,12 +72,25 @@ public class ThomasAttractor : MonoBehaviour
 
     public void ResetTrail()
     {
-        tx = 0.1f;
-        ty = 0f;
-        tz = 0f;
-        head = 0;
-        count = 0;
+        tx = 0.1f; ty = 0f; tz = 0f;
+        head = 0; count = 0;
         if (lr != null) lr.positionCount = 0;
+
+        if (multiMode) ResetParticles();
+    }
+
+    void ResetParticles()
+    {
+        if (px == null) return;
+        for (int i = 0; i < particleCount; i++)
+        {
+            px[i] = 0.1f + Random.Range(-scatterRange, scatterRange);
+            py[i] = Random.Range(-scatterRange, scatterRange);
+            pz[i] = Random.Range(-scatterRange, scatterRange);
+            pHeads[i] = 0;
+            pCounts[i] = 0;
+            if (particleTrails[i] != null) particleTrails[i].positionCount = 0;
+        }
     }
 
     void PlaceInFrontOfCamera()
@@ -82,7 +115,9 @@ public class ThomasAttractor : MonoBehaviour
             HandleInput();
 
         Vector3 center = transform.position;
+        Quaternion rot = transform.rotation;
 
+        // Main trail
         for (int step = 0; step < stepsPerFrame; step++)
         {
             float prevX = tx, prevY = ty, prevZ = tz;
@@ -95,7 +130,6 @@ public class ThomasAttractor : MonoBehaviour
             ty += dydt * dt;
             tz += dzdt * dt;
 
-            // Divergence guard
             if (float.IsNaN(tx) || float.IsInfinity(tx) ||
                 float.IsNaN(ty) || float.IsInfinity(ty) ||
                 float.IsNaN(tz) || float.IsInfinity(tz))
@@ -105,7 +139,7 @@ public class ThomasAttractor : MonoBehaviour
             }
 
             Vector3 localPos = new Vector3(tx, ty, tz) * thomasScale;
-            Vector3 worldPos = center + transform.rotation * localPos;
+            Vector3 worldPos = center + rot * localPos;
 
             float dx = tx - prevX, dy = ty - prevY, dz = tz - prevZ;
             float spd = Mathf.Sqrt(dx * dx + dy * dy + dz * dz);
@@ -117,6 +151,67 @@ public class ThomasAttractor : MonoBehaviour
         }
 
         UpdateLineRenderer();
+
+        // Multi-particle update
+        if (multiMode && px != null)
+            UpdateParticles(center, rot);
+    }
+
+    void UpdateParticles(Vector3 center, Quaternion rot)
+    {
+        for (int i = 0; i < particleCount; i++)
+        {
+            float cx = px[i], cy = py[i], cz = pz[i];
+
+            for (int step = 0; step < stepsPerFrame; step++)
+            {
+                float dxdt = Mathf.Sin(cy) - b * cx;
+                float dydt = Mathf.Sin(cz) - b * cy;
+                float dzdt = Mathf.Sin(cx) - b * cz;
+
+                cx += dxdt * dt;
+                cy += dydt * dt;
+                cz += dzdt * dt;
+            }
+
+            if (float.IsNaN(cx) || float.IsInfinity(cx))
+            {
+                cx = 0.1f + Random.Range(-scatterRange, scatterRange);
+                cy = Random.Range(-scatterRange, scatterRange);
+                cz = Random.Range(-scatterRange, scatterRange);
+            }
+
+            px[i] = cx; py[i] = cy; pz[i] = cz;
+
+            Vector3 localPos = new Vector3(cx, cy, cz) * thomasScale;
+            Vector3 worldPos = center + rot * localPos;
+
+            // Update sphere position
+            particleSpheres[i].transform.position = worldPos;
+
+            // Speed → brightness
+            float spd = Mathf.Abs(Mathf.Sin(cy) - b * cx);
+            float hue = (float)i / particleCount;
+            float val = Mathf.Clamp01(0.4f + spd * 0.5f);
+            Color col = Color.HSVToRGB(hue, 1f, val);
+            particleSpheres[i].GetComponent<MeshRenderer>().material.color = col;
+
+            // Particle trail
+            var pts = pTrailPts[i];
+            int h = pHeads[i];
+            pts[h] = worldPos;
+            pHeads[i] = (h + 1) % particleTrailMax;
+            if (pCounts[i] < particleTrailMax) pCounts[i]++;
+
+            int pc = pCounts[i];
+            int st = pc < particleTrailMax ? 0 : pHeads[i];
+            var tlr = particleTrails[i];
+            tlr.positionCount = pc;
+            var pos = new Vector3[pc];
+            for (int j = 0; j < pc; j++)
+                pos[j] = pts[(st + j) % particleTrailMax];
+            tlr.SetPositions(pos);
+        }
     }
 
     void UpdateLineRenderer()
@@ -136,7 +231,6 @@ public class ThomasAttractor : MonoBehaviour
 
         lr.SetPositions(positions);
 
-        // Color gradient: 8 sample points, slow=green -> fast=yellow
         int numKeys = Mathf.Min(8, Mathf.Max(2, count));
         var colorKeys = new GradientColorKey[numKeys];
         var alphaKeys = new GradientAlphaKey[2];
@@ -161,6 +255,7 @@ public class ThomasAttractor : MonoBehaviour
         float paramSpeed = Time.deltaTime;
         float lxIn = 0f, ryIn = 0f;
         bool gripPressed = false;
+        bool yPressed = false;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
@@ -171,6 +266,7 @@ public class ThomasAttractor : MonoBehaviour
             if (kb.iKey.isPressed) ryIn = 1f;
             if (kb.kKey.isPressed) ryIn = -1f;
             if (kb.gKey.wasPressedThisFrame) gripPressed = true;
+            if (kb.mKey.wasPressedThisFrame) ToggleMultiMode();
         }
 #else
         var leftCtrl = XRController.leftHand;
@@ -181,6 +277,9 @@ public class ThomasAttractor : MonoBehaviour
 
             var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
             if (grip != null && grip.ReadValue() > 0.5f) gripPressed = true;
+
+            var yBtn = leftCtrl.TryGetChildControl<ButtonControl>("secondaryButton");
+            if (yBtn != null) yPressed = yBtn.isPressed;
         }
         var rightCtrl = XRController.rightHand;
         if (rightCtrl != null)
@@ -188,19 +287,118 @@ public class ThomasAttractor : MonoBehaviour
             var stick = rightCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null) { ryIn = stick.y.ReadValue(); }
         }
+
+        // Y button long press
+        if (yPressed)
+        {
+            yHoldTime += Time.deltaTime;
+            if (yHoldTime >= multiLongPress && !yLongFired)
+            {
+                ToggleMultiMode();
+                yLongFired = true;
+            }
+        }
+        else
+        {
+            yHoldTime = 0f;
+            yLongFired = false;
+        }
 #endif
 
         if (gripPressed) PlaceInFrontOfCamera();
 
-        // Left stick LR -> b (0.1~0.5)
         b = Mathf.Clamp(b + lxIn * (bMax - bMin) * paramSpeed, bMin, bMax);
-        // Right stick FB -> dt (speed)
         dt = Mathf.Clamp(dt + ryIn * 0.1f * paramSpeed, dtMin, dtMax);
     }
 
-    // Public accessors for ShapeManager / DebugDisplay
+    void ToggleMultiMode()
+    {
+        multiMode = !multiMode;
+        if (multiMode)
+            InitMultiParticles();
+        else
+            DestroyMultiParticles();
+    }
+
+    void InitMultiParticles()
+    {
+        DestroyMultiParticles();
+
+        multiRoot = new GameObject("MultiParticles");
+        multiRoot.transform.SetParent(transform, false);
+
+        var tmp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sharedSphereMesh = tmp.GetComponent<MeshFilter>().sharedMesh;
+        Destroy(tmp);
+
+        sharedSphereMat = new Material(Shader.Find("Sprites/Default"));
+        var trailMat = new Material(Shader.Find("Sprites/Default"));
+
+        px = new float[particleCount];
+        py = new float[particleCount];
+        pz = new float[particleCount];
+        particleSpheres = new GameObject[particleCount];
+        particleTrails = new LineRenderer[particleCount];
+        pTrailPts = new Vector3[particleCount][];
+        pHeads = new int[particleCount];
+        pCounts = new int[particleCount];
+
+        for (int i = 0; i < particleCount; i++)
+        {
+            px[i] = 0.1f + Random.Range(-scatterRange, scatterRange);
+            py[i] = Random.Range(-scatterRange, scatterRange);
+            pz[i] = Random.Range(-scatterRange, scatterRange);
+
+            float hue = (float)i / particleCount;
+            Color col = Color.HSVToRGB(hue, 1f, 1f);
+
+            var sGo = new GameObject($"p{i}");
+            sGo.transform.SetParent(multiRoot.transform, false);
+            sGo.AddComponent<MeshFilter>().sharedMesh = sharedSphereMesh;
+            var mr = sGo.AddComponent<MeshRenderer>();
+            mr.material = new Material(sharedSphereMat);
+            mr.material.color = col;
+            sGo.transform.localScale = Vector3.one * particleRadius * 2f;
+            particleSpheres[i] = sGo;
+
+            var tGo = new GameObject($"t{i}");
+            tGo.transform.SetParent(multiRoot.transform, false);
+            var tlr = tGo.AddComponent<LineRenderer>();
+            tlr.useWorldSpace = true;
+            tlr.startWidth = 0.001f;
+            tlr.endWidth = 0.001f;
+            tlr.material = trailMat;
+            Color tc = col; tc.a = 0.3f;
+            tlr.startColor = tc;
+            tlr.endColor = tc;
+            tlr.positionCount = 0;
+            particleTrails[i] = tlr;
+
+            pTrailPts[i] = new Vector3[particleTrailMax];
+            pHeads[i] = 0;
+            pCounts[i] = 0;
+        }
+    }
+
+    void DestroyMultiParticles()
+    {
+        if (multiRoot != null)
+        {
+            Destroy(multiRoot);
+            multiRoot = null;
+        }
+        px = null; py = null; pz = null;
+        particleSpheres = null;
+        particleTrails = null;
+        pTrailPts = null;
+        pHeads = null;
+        pCounts = null;
+    }
+
     public string GetParamLabel()
     {
-        return $"Thomas b:{b:F3}";
+        string label = $"Thomas b:{b:F3}";
+        if (multiMode) label += " [Multi]";
+        return label;
     }
 }
