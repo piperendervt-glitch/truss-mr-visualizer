@@ -231,15 +231,16 @@ public class Hexadecachoron : MonoBehaviour
         faceMesh.RecalculateNormals();
         faceMesh.RecalculateBounds();
 
-        // Update wireframe edges (world space)
+        // Update wireframe edges (world space, applying transform rotation)
         Vector3 pos = transform.position;
+        Quaternion rot = transform.rotation;
         int idx = 0;
         for (int a = 0; a < 8; a++)
             for (int b = a + 1; b < 8; b++)
             {
                 if (IsOpposing(a, b)) continue;
-                lines[idx].SetPosition(0, pos + localVerts[a]);
-                lines[idx].SetPosition(1, pos + localVerts[b]);
+                lines[idx].SetPosition(0, pos + rot * localVerts[a]);
+                lines[idx].SetPosition(1, pos + rot * localVerts[b]);
                 idx++;
             }
     }

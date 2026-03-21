@@ -262,15 +262,16 @@ public class Tesseract : MonoBehaviour
         faceMesh.RecalculateNormals();
         faceMesh.RecalculateBounds();
 
-        // Update wireframe edges (world space)
+        // Update wireframe edges (world space, applying transform rotation)
         Vector3 pos = transform.position;
+        Quaternion rot = transform.rotation;
         int idx = 0;
         for (int a = 0; a < 16; a++)
             for (int b = a + 1; b < 16; b++)
             {
                 if (!DiffersByOne(verts4D[a], verts4D[b])) continue;
-                lines[idx].SetPosition(0, pos + localVerts[a]);
-                lines[idx].SetPosition(1, pos + localVerts[b]);
+                lines[idx].SetPosition(0, pos + rot * localVerts[a]);
+                lines[idx].SetPosition(1, pos + rot * localVerts[b]);
                 idx++;
             }
     }
