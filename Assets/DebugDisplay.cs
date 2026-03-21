@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.UI;
+using TMPro;
 
 public class DebugDisplay : MonoBehaviour
 {
@@ -10,17 +12,45 @@ public class DebugDisplay : MonoBehaviour
     public RotationSnapshot rotationSnapshot;
     public int activeIndex;
 
-    bool visible = true;
+    bool visible;
     bool prevYButton;
-    string debugText = "";
+    GameObject canvasGo;
+    TextMeshProUGUI debugTMP;
 
     // FPS
     int frameCount;
     float fpsTimer;
     float currentFps;
 
-    // GUI style (created once)
-    GUIStyle guiStyle;
+    void Start()
+    {
+        // Canvas (Screen Space - Camera)
+        canvasGo = new GameObject("DebugCanvas");
+        canvasGo.transform.SetParent(transform, false);
+        var canvas = canvasGo.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = Camera.main;
+        canvas.planeDistance = 0.5f;
+        canvasGo.AddComponent<CanvasScaler>();
+        canvasGo.AddComponent<GraphicRaycaster>();
+
+        // TextMeshProUGUI anchored top-left
+        var textGo = new GameObject("DebugText");
+        textGo.transform.SetParent(canvasGo.transform, false);
+        debugTMP = textGo.AddComponent<TextMeshProUGUI>();
+        debugTMP.fontSize = 18;
+        debugTMP.color = Color.white;
+
+        RectTransform rt = textGo.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 1);
+        rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1);
+        rt.anchoredPosition = new Vector2(10, -10);
+        rt.sizeDelta = new Vector2(400, 300);
+
+        // Default: hidden
+        canvasGo.SetActive(false);
+    }
 
     void Update()
     {
@@ -43,7 +73,12 @@ public class DebugDisplay : MonoBehaviour
         }
 #endif
 
-        if (toggleDown) visible = !visible;
+        if (toggleDown)
+        {
+            visible = !visible;
+            if (canvasGo != null) canvasGo.SetActive(visible);
+        }
+
         if (!visible) return;
 
         // FPS
@@ -112,27 +147,7 @@ public class DebugDisplay : MonoBehaviour
         if (rotationSnapshot != null)
             sb.AppendLine(rotationSnapshot.GetSlotDisplay());
 
-        debugText = sb.ToString();
-    }
-
-    void OnGUI()
-    {
-        if (!visible) return;
-
-        if (guiStyle == null)
-        {
-            guiStyle = new GUIStyle(GUI.skin.label);
-            guiStyle.fontSize = 24;
-            guiStyle.normal.textColor = Color.white;
-            guiStyle.wordWrap = true;
-        }
-
-        // Semi-transparent background
-        GUI.color = new Color(0f, 0f, 0f, 0.5f);
-        GUI.DrawTexture(new Rect(10, 10, 500, 220), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        GUI.Label(new Rect(15, 15, 490, 210), debugText, guiStyle);
+        debugTMP.text = sb.ToString();
     }
 
     GameObject GetActiveShape()
