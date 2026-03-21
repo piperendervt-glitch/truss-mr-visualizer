@@ -12,7 +12,7 @@ public class DebugDisplay : MonoBehaviour
     public RotationSnapshot rotationSnapshot;
     public int activeIndex;
 
-    bool visible;
+    bool visible = true; // default ON for testing
     bool prevYButton;
     GameObject canvasGo;
     TextMeshProUGUI debugTMP;
@@ -24,32 +24,46 @@ public class DebugDisplay : MonoBehaviour
 
     void Start()
     {
-        // Canvas (Screen Space - Camera)
+        // World Space Canvas
         canvasGo = new GameObject("DebugCanvas");
         canvasGo.transform.SetParent(transform, false);
         var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceCamera;
-        canvas.worldCamera = Camera.main;
-        canvas.planeDistance = 0.5f;
+        canvas.renderMode = RenderMode.WorldSpace;
         canvasGo.AddComponent<CanvasScaler>();
         canvasGo.AddComponent<GraphicRaycaster>();
+
+        // Canvas RectTransform size
+        var canvasRT = canvasGo.GetComponent<RectTransform>();
+        canvasRT.sizeDelta = new Vector2(800, 400);
+        canvasGo.transform.localScale = Vector3.one * 0.001f;
 
         // TextMeshProUGUI anchored top-left
         var textGo = new GameObject("DebugText");
         textGo.transform.SetParent(canvasGo.transform, false);
         debugTMP = textGo.AddComponent<TextMeshProUGUI>();
-        debugTMP.fontSize = 18;
+        debugTMP.fontSize = 24;
         debugTMP.color = Color.white;
 
         RectTransform rt = textGo.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0, 1);
-        rt.anchorMax = new Vector2(0, 1);
-        rt.pivot = new Vector2(0, 1);
-        rt.anchoredPosition = new Vector2(10, -10);
-        rt.sizeDelta = new Vector2(400, 300);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(10, 10);
+        rt.offsetMax = new Vector2(-10, -10);
 
-        // Default: hidden
-        canvasGo.SetActive(false);
+        // Background image for readability
+        var bgGo = new GameObject("DebugBG");
+        bgGo.transform.SetParent(canvasGo.transform, false);
+        bgGo.transform.SetAsFirstSibling();
+        var bgImg = bgGo.AddComponent<Image>();
+        bgImg.color = new Color(0f, 0f, 0f, 0.5f);
+        var bgRT = bgGo.GetComponent<RectTransform>();
+        bgRT.anchorMin = Vector2.zero;
+        bgRT.anchorMax = Vector2.one;
+        bgRT.offsetMin = Vector2.zero;
+        bgRT.offsetMax = Vector2.zero;
+
+        // Force visible for testing
+        canvasGo.SetActive(true);
     }
 
     void Update()
@@ -60,6 +74,8 @@ public class DebugDisplay : MonoBehaviour
         var kb = Keyboard.current;
         if (kb != null && kb.fKey.wasPressedThisFrame) toggleDown = true;
 #else
+        // Try multiple methods to detect Y button on Quest 3
+        // Method 1: Input System XRController secondaryButton on left hand
         var leftCtrl = XRController.leftHand;
         if (leftCtrl != null)
         {
@@ -71,12 +87,35 @@ public class DebugDisplay : MonoBehaviour
                 prevYButton = p;
             }
         }
+
+        // Method 2: OVRInput fallback
+        if (!toggleDown)
+        {
+            try
+            {
+                if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch))
+                    toggleDown = true;
+            }
+            catch { }
+        }
 #endif
 
         if (toggleDown)
         {
             visible = !visible;
             if (canvasGo != null) canvasGo.SetActive(visible);
+        }
+
+        // Position canvas in front of camera
+        var cam = Camera.main;
+        if (cam != null && canvasGo != null && canvasGo.activeSelf)
+        {
+            canvasGo.transform.position = cam.transform.position
+                + cam.transform.forward * 1.0f
+                + cam.transform.up * 0.15f
+                + cam.transform.right * -0.3f;
+            canvasGo.transform.LookAt(cam.transform.position);
+            canvasGo.transform.Rotate(0f, 180f, 0f);
         }
 
         if (!visible) return;
