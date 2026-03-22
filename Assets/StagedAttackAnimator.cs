@@ -51,6 +51,12 @@ public class StagedAttackAnimator : MonoBehaviour
     float rotSpeed = 60f;
     bool placedOnStart;
 
+    // Trial pause state
+    bool trialPausing;
+    float trialPauseTimer;
+    int lastPausedTrial = -1;
+    TextMeshPro pauseLabel;
+
     // Q3 vertex positions (unit cube corners)
     static readonly Vector3[] q3Corners = {
         new Vector3(-1,-1,-1), new Vector3(-1,-1,+1),
@@ -109,6 +115,14 @@ public class StagedAttackAnimator : MonoBehaviour
         // Labels
         public TextMeshPro titleLabel;  // "10%", "20%", "50%"
         public TextMeshPro statsLabel;  // phi + trial info
+
+        // Result highlight
+        public LineRenderer failRing;       // large red ring for failure
+        public TextMeshPro resultLabel;     // "FAILED: phi=94.6%" or "OK: phi=100%"
+        public float resultTimer;           // countdown for result display
+
+        // Background panel
+        public MeshRenderer bgPanel;
     }
 
     void Start()
@@ -219,12 +233,20 @@ public class StagedAttackAnimator : MonoBehaviour
     int[][] edgeIndices;
     string[] edgeKeys;
 
+    // Background panel colors per scenario
+    static readonly Color[] bgColors = {
+        new Color(0f, 1f, 0f, 0.1f),   // 10%: light green
+        new Color(1f, 1f, 0f, 0.1f),   // 20%: light yellow
+        new Color(1f, 0f, 0f, 0.1f),   // 50%: light red
+    };
+
     void SetupScenarioViews(int[][] indices, string[] keys)
     {
         edgeIndices = indices;
         edgeKeys = keys;
 
         var mat = new Material(Shader.Find("Sprites/Default"));
+        var unlitMat = new Material(Shader.Find("Unlit/Transparent"));
         string[] labels = { "10%", "20%", "50%" };
 
         for (int s = 0; s < SCENARIO_COUNT; s++)
@@ -236,6 +258,18 @@ public class StagedAttackAnimator : MonoBehaviour
             view.root = new GameObject($"Scenario_{s}");
             view.root.transform.SetParent(transform, false);
             view.root.transform.localPosition = scenarioOffsets[s];
+
+            // Background panel (Quad behind each graph)
+            var bgGo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            bgGo.name = "BgPanel";
+            bgGo.transform.SetParent(view.root.transform, false);
+            bgGo.transform.localPosition = new Vector3(0f, 0f, 0.02f);
+            bgGo.transform.localScale = new Vector3(0.28f, 0.28f, 1f);
+            Object.Destroy(bgGo.GetComponent<Collider>());
+            var bgMat = new Material(Shader.Find("Sprites/Default"));
+            bgMat.color = bgColors[s];
+            view.bgPanel = bgGo.GetComponent<MeshRenderer>();
+            view.bgPanel.material = bgMat;
 
             // Edges
             view.edgeLines = new LineRenderer[indices.Length];
@@ -260,6 +294,12 @@ public class StagedAttackAnimator : MonoBehaviour
             view.phaseRing = CreateRing(view.root.transform, 0.15f, mat);
             view.phaseRing.gameObject.SetActive(false);
 
+            // Fail ring (2x size, for failure highlight)
+            view.failRing = CreateRing(view.root.transform, 0.30f, mat);
+            view.failRing.startWidth = 0.006f;
+            view.failRing.endWidth = 0.006f;
+            view.failRing.gameObject.SetActive(false);
+
             // Title label above graph
             view.titleLabel = CreateWorldLabel(view.root.transform,
                 labels[s], new Vector3(0f, 0.12f, 0f), 0.07f, Color.yellow);
@@ -267,7 +307,16 @@ public class StagedAttackAnimator : MonoBehaviour
             // Stats label below graph
             view.statsLabel = CreateWorldLabel(view.root.transform,
                 "", new Vector3(0f, -0.18f, 0f), 0.025f, Color.white);
+
+            // Result label (center of graph, hidden by default)
+            view.resultLabel = CreateWorldLabel(view.root.transform,
+                "", Vector3.zero, 0.08f, Color.red);
+            view.resultLabel.gameObject.SetActive(false);
         }
+
+        // Pause label (global, child of this object)
+        pauseLabel = CreateWorldLabel(transform, "", new Vector3(0f, -0.25f, 0f), 0.04f, Color.cyan);
+        pauseLabel.gameObject.SetActive(false);
     }
 
     TextMeshPro CreateWorldLabel(Transform parent, string text, Vector3 localPos, float fontSize, Color color)
@@ -335,6 +384,10 @@ public class StagedAttackAnimator : MonoBehaviour
     {
         currentFrame = 0;
         frameTimer = 0f;
+        trialPausing = false;
+        trialPauseTimer = 0f;
+        lastPausedTrial = -1;
+        if (pauseLabel != null) pauseLabel.gameObject.SetActive(false);
         if (views != null)
         {
             for (int s = 0; s < SCENARIO_COUNT; s++)
@@ -342,9 +395,14 @@ public class StagedAttackAnimator : MonoBehaviour
                 if (views[s] == null) continue;
                 views[s].activeAttackEdges.Clear();
                 views[s].prevPhase = "";
+                views[s].resultTimer = 0f;
                 if (views[s].edgeAttackLerp != null)
                     for (int i = 0; i < views[s].edgeAttackLerp.Length; i++)
                         views[s].edgeAttackLerp[i] = 0f;
+                if (views[s].resultLabel != null)
+                    views[s].resultLabel.gameObject.SetActive(false);
+                if (views[s].failRing != null)
+                    views[s].failRing.gameObject.SetActive(false);
             }
         }
         Debug.Log("Staged: reset to frame 0");
@@ -372,13 +430,34 @@ public class StagedAttackAnimator : MonoBehaviour
         if (!dataLoaded) return;
 
         HandleInput();
-        UpdateAnimation();
+
+        // Trial pause countdown
+        if (trialPausing)
+        {
+            trialPauseTimer -= Time.deltaTime;
+            if (pauseLabel != null)
+            {
+                pauseLabel.gameObject.SetActive(true);
+                pauseLabel.text = $"Trial {lastPausedTrial}/5 complete - resuming in {Mathf.CeilToInt(trialPauseTimer)}s...";
+            }
+            if (trialPauseTimer <= 0f)
+            {
+                trialPausing = false;
+                playing = true;
+                if (pauseLabel != null) pauseLabel.gameObject.SetActive(false);
+            }
+        }
+        else
+        {
+            UpdateAnimation();
+        }
 
         for (int s = 0; s < SCENARIO_COUNT; s++)
             UpdateScenarioVisuals(s);
 
         UpdateEdgePositions();
         UpdateLabels();
+        UpdateResultDisplays();
     }
 
     void HandleInput()
@@ -458,8 +537,12 @@ public class StagedAttackAnimator : MonoBehaviour
         while (frameTimer >= interval)
         {
             frameTimer -= interval;
-            currentFrame++;
-            if (currentFrame >= animData.scenarios[0].frames.Length)
+
+            // Check if current frame is result and next frame is different trial (transition)
+            var curFrame = animData.scenarios[0].frames[currentFrame];
+            int nextIdx = currentFrame + 1;
+
+            if (nextIdx >= animData.scenarios[0].frames.Length)
             {
                 currentFrame = animData.scenarios[0].frames.Length - 1;
                 playing = false;
@@ -467,6 +550,27 @@ public class StagedAttackAnimator : MonoBehaviour
                 Debug.Log("Staged: reached end, auto-stopped");
                 return;
             }
+
+            // Detect trial boundary: result phase → next frame has different trial
+            var nextFrame = animData.scenarios[0].frames[nextIdx];
+            if (curFrame.phase == "result" && nextFrame.trial != curFrame.trial
+                && curFrame.trial != lastPausedTrial)
+            {
+                // Trigger result highlight for all scenarios
+                for (int s = 0; s < SCENARIO_COUNT; s++)
+                    TriggerResultHighlight(s);
+
+                // Auto-pause for 2 seconds
+                playing = false;
+                trialPausing = true;
+                trialPauseTimer = 2f;
+                lastPausedTrial = curFrame.trial;
+                frameTimer = 0f;
+                Debug.Log($"Staged: trial {curFrame.trial} complete, pausing 2s");
+                return;
+            }
+
+            currentFrame = nextIdx;
         }
     }
 
@@ -568,6 +672,84 @@ public class StagedAttackAnimator : MonoBehaviour
 
         // Phase ring
         UpdatePhaseRing(view, phase, s);
+    }
+
+    void TriggerResultHighlight(int s)
+    {
+        var view = views[s];
+        if (view == null) return;
+        float phi = phiRates[s];
+        bool failed = phi < 95f;
+
+        if (failed)
+        {
+            // Show large red ring + FAILED text for 3 seconds
+            view.resultLabel.text = $"FAILED: \u03c6={phi:F1}%";
+            view.resultLabel.color = Color.red;
+            view.resultLabel.gameObject.SetActive(true);
+            view.resultTimer = 3f;
+
+            if (view.failRing != null)
+            {
+                view.failRing.startColor = Color.red;
+                view.failRing.endColor = Color.red;
+                view.failRing.gameObject.SetActive(true);
+            }
+        }
+        else
+        {
+            // Show OK text in green for 1 second
+            view.resultLabel.text = $"OK: \u03c6={phi:F1}%";
+            view.resultLabel.color = Color.green;
+            view.resultLabel.gameObject.SetActive(true);
+            view.resultTimer = 1f;
+
+            if (view.failRing != null)
+                view.failRing.gameObject.SetActive(false);
+        }
+    }
+
+    void UpdateResultDisplays()
+    {
+        var cam = Camera.main;
+        for (int s = 0; s < SCENARIO_COUNT; s++)
+        {
+            var view = views[s];
+            if (view == null) continue;
+
+            if (view.resultTimer > 0f)
+            {
+                view.resultTimer -= Time.deltaTime;
+                if (view.resultTimer <= 0f)
+                {
+                    view.resultLabel.gameObject.SetActive(false);
+                    if (view.failRing != null)
+                        view.failRing.gameObject.SetActive(false);
+                }
+            }
+
+            // Billboard result label and fail ring
+            if (cam != null)
+            {
+                if (view.resultLabel != null && view.resultLabel.gameObject.activeSelf)
+                {
+                    view.resultLabel.transform.LookAt(cam.transform);
+                    view.resultLabel.transform.Rotate(0f, 180f, 0f);
+                }
+                if (view.failRing != null && view.failRing.gameObject.activeSelf)
+                {
+                    view.failRing.transform.LookAt(cam.transform);
+                    view.failRing.transform.Rotate(0f, 180f, 0f);
+                }
+            }
+        }
+
+        // Billboard pause label
+        if (cam != null && pauseLabel != null && pauseLabel.gameObject.activeSelf)
+        {
+            pauseLabel.transform.LookAt(cam.transform);
+            pauseLabel.transform.Rotate(0f, 180f, 0f);
+        }
     }
 
     void UpdatePhaseRing(ScenarioView view, string phase, int scenarioIndex)

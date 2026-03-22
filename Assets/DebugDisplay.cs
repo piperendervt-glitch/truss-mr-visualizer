@@ -19,6 +19,8 @@ public class DebugDisplay : MonoBehaviour
     // Phi bar graph
     Image phiBarFill;
     GameObject phiBarRoot;
+    Image thresholdLine;
+    TextMeshProUGUI thresholdLabel;
 
     // FPS
     int frameCount;
@@ -98,6 +100,33 @@ public class DebugDisplay : MonoBehaviour
         barFillRT.pivot = new Vector2(0f, 0.5f);
         barFillRT.offsetMin = Vector2.zero;
         barFillRT.offsetMax = Vector2.zero;
+
+        // 95% threshold line
+        var threshGo = new GameObject("ThresholdLine");
+        threshGo.transform.SetParent(phiBarRoot.transform, false);
+        thresholdLine = threshGo.AddComponent<Image>();
+        thresholdLine.color = Color.white;
+        var threshRT = threshGo.GetComponent<RectTransform>();
+        threshRT.anchorMin = new Vector2(0.95f, 0f);
+        threshRT.anchorMax = new Vector2(0.95f, 1f);
+        threshRT.pivot = new Vector2(0.5f, 0.5f);
+        threshRT.sizeDelta = new Vector2(2f, 0f);
+        threshRT.anchoredPosition = Vector2.zero;
+
+        // 95% label
+        var threshLabelGo = new GameObject("ThresholdLabel");
+        threshLabelGo.transform.SetParent(phiBarRoot.transform, false);
+        thresholdLabel = threshLabelGo.AddComponent<TextMeshProUGUI>();
+        thresholdLabel.text = "95%";
+        thresholdLabel.fontSize = 10;
+        thresholdLabel.color = Color.white;
+        thresholdLabel.alignment = TextAlignmentOptions.Center;
+        var tlRT = threshLabelGo.GetComponent<RectTransform>();
+        tlRT.anchorMin = new Vector2(0.95f, 1f);
+        tlRT.anchorMax = new Vector2(0.95f, 1f);
+        tlRT.pivot = new Vector2(0.5f, 0f);
+        tlRT.sizeDelta = new Vector2(40f, 14f);
+        tlRT.anchoredPosition = new Vector2(0f, 1f);
 
         phiBarRoot.SetActive(false);
 
