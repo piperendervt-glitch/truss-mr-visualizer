@@ -57,6 +57,12 @@ public class StagedAttackAnimator : MonoBehaviour
     int lastPausedTrial = -1;
     TextMeshPro pauseLabel;
 
+    // Recovery path tracking (追加③)
+    List<List<int>>[] recoveryPaths; // per scenario
+    List<int>[] currentRecoveryOrder; // per scenario, current trial
+    bool[][] edgeRecovered; // per scenario, tracks which edges already recovered this trial
+    float[] diversityScores; // per scenario
+
     // Q3 vertex positions (unit cube corners)
     static readonly Vector3[] q3Corners = {
         new Vector3(-1,-1,-1), new Vector3(-1,-1,+1),
@@ -120,6 +126,9 @@ public class StagedAttackAnimator : MonoBehaviour
         public LineRenderer failRing;       // large red ring for failure
         public TextMeshPro resultLabel;     // "FAILED: phi=94.6%" or "OK: phi=100%"
         public float resultTimer;           // countdown for result display
+
+        // Blinking state (追加②)
+        public bool blinkingFailed;
 
         // Background panel
         public MeshRenderer bgPanel;
@@ -224,6 +233,20 @@ public class StagedAttackAnimator : MonoBehaviour
 
         SetupScenarioViews(edgeIndicesArr, edgeKeysArr);
         totalFrames = animData.scenarios[0].frames.Length;
+
+        // Initialize recovery path tracking (追加③)
+        int edgeCount2 = edgeIndicesArr.Length;
+        recoveryPaths = new List<List<int>>[SCENARIO_COUNT];
+        currentRecoveryOrder = new List<int>[SCENARIO_COUNT];
+        edgeRecovered = new bool[SCENARIO_COUNT][];
+        diversityScores = new float[SCENARIO_COUNT];
+        for (int s = 0; s < SCENARIO_COUNT; s++)
+        {
+            recoveryPaths[s] = new List<List<int>>();
+            currentRecoveryOrder[s] = new List<int>();
+            edgeRecovered[s] = new bool[edgeCount2];
+        }
+
         dataLoaded = true;
 
         Debug.Log($"Staged: JSON loaded, scenarios={animData.scenarios.Length}, frames={totalFrames}, edges={edgeCount}");
@@ -302,11 +325,11 @@ public class StagedAttackAnimator : MonoBehaviour
 
             // Title label above graph
             view.titleLabel = CreateWorldLabel(view.root.transform,
-                labels[s], new Vector3(0f, 0.12f, 0f), 0.09f, Color.yellow);
+                labels[s], new Vector3(0f, 0.12f, 0f), 0.12f, Color.yellow);
 
             // Stats label below graph
             view.statsLabel = CreateWorldLabel(view.root.transform,
-                "", new Vector3(0f, -0.18f, 0f), 0.038f, Color.white);
+                "", new Vector3(0f, -0.15f, 0f), 0.076f, Color.white);
 
             // Result label (center of graph, hidden by default)
             view.resultLabel = CreateWorldLabel(view.root.transform,
@@ -403,6 +426,20 @@ public class StagedAttackAnimator : MonoBehaviour
                     views[s].resultLabel.gameObject.SetActive(false);
                 if (views[s].failRing != null)
                     views[s].failRing.gameObject.SetActive(false);
+                views[s].blinkingFailed = false;
+            }
+        }
+        // Reset recovery paths
+        if (recoveryPaths != null)
+        {
+            for (int s = 0; s < SCENARIO_COUNT; s++)
+            {
+                recoveryPaths[s].Clear();
+                currentRecoveryOrder[s].Clear();
+                if (edgeRecovered[s] != null)
+                    for (int i = 0; i < edgeRecovered[s].Length; i++)
+                        edgeRecovered[s][i] = false;
+                diversityScores[s] = 0f;
             }
         }
         Debug.Log("Staged: reset to frame 0");
@@ -639,6 +676,52 @@ public class StagedAttackAnimator : MonoBehaviour
                 view.edgeAttackLerp[i] = 0f;
         }
 
+        // Recovery path tracking (追加③)
+        if (recoveryPaths != null && phase == "recovering")
+        {
+            for (int i = 0; i < edgeKeys.Length; i++)
+            {
+                float w = 0f;
+                if (frame.weights != null)
+                    frame.weights.TryGetValue(edgeKeys[i], out w);
+                if (w > 0.5f && !edgeRecovered[s][i])
+                {
+                    edgeRecovered[s][i] = true;
+                    currentRecoveryOrder[s].Add(i);
+                }
+            }
+        }
+
+        // Finalize recovery path at trial boundary (recovering → result or converging)
+        if (recoveryPaths != null && view.prevPhase == "recovering" && phase != "recovering")
+        {
+            if (currentRecoveryOrder[s].Count > 0)
+            {
+                // Calculate diversity score against previous trial
+                if (recoveryPaths[s].Count > 0)
+                {
+                    var prev = recoveryPaths[s][recoveryPaths[s].Count - 1];
+                    diversityScores[s] = DiversityScore(prev, currentRecoveryOrder[s]);
+                }
+                recoveryPaths[s].Add(new List<int>(currentRecoveryOrder[s]));
+            }
+            currentRecoveryOrder[s] = new List<int>();
+            for (int i = 0; i < edgeRecovered[s].Length; i++)
+                edgeRecovered[s][i] = false;
+        }
+
+        // Stop blinking when new trial starts (追加②)
+        if (view.blinkingFailed && phase == "attacking" && view.prevPhase != "attacking")
+        {
+            view.blinkingFailed = false;
+        }
+
+        // Start blinking for scenario 2 (50%) on result phase with failure (追加②)
+        if (s == 2 && phase == "result" && frame.phi_rate < 95f)
+        {
+            view.blinkingFailed = true;
+        }
+
         view.prevPhase = phase;
 
         // Apply edge colors
@@ -657,6 +740,13 @@ public class StagedAttackAnimator : MonoBehaviour
             {
                 c = Color.Lerp(weightColor, orangeAttack, attackT);
                 width = Mathf.Lerp(0.0015f, 0.005f, attackT);
+            }
+            // Blinking for 50% scenario failed edges (追加②)
+            else if (view.blinkingFailed && w < 0.5f)
+            {
+                float blink = (Mathf.Sin(Time.time * 3f) + 1f) * 0.5f; // 0~1
+                c = Color.Lerp(Color.blue, Color.white, blink);
+                width = 0.003f;
             }
             else
             {
@@ -838,7 +928,10 @@ public class StagedAttackAnimator : MonoBehaviour
             {
                 var frame = animData.scenarios[s].frames[currentFrame];
                 int totalTrials = 5;
-                view.statsLabel.text = $"\u03c6: {frame.phi_rate:F1}%\nTrial: {frame.trial}/{totalTrials}  OK: {frame.success_count}";
+                float div = (diversityScores != null) ? diversityScores[s] : 0f;
+                string divLine = (recoveryPaths != null && recoveryPaths[s].Count > 1)
+                    ? $"\nDiv: {div:F2}" : "";
+                view.statsLabel.text = $"\u03c6: {frame.phi_rate:F1}%\nT:{frame.trial} OK:{frame.success_count}{divLine}";
                 view.statsLabel.transform.LookAt(cam.transform);
                 view.statsLabel.transform.Rotate(0f, 180f, 0f);
             }
@@ -878,6 +971,19 @@ public class StagedAttackAnimator : MonoBehaviour
                $"10%: \u03c6={phiRates[0]:F1}% T:{trials[0]} OK:{successCounts[0]}\n" +
                $"20%: \u03c6={phiRates[1]:F1}% T:{trials[1]} OK:{successCounts[1]}\n" +
                $"50%: \u03c6={phiRates[2]:F1}% T:{trials[2]} OK:{successCounts[2]}";
+    }
+
+    // Recovery path diversity score (追加③)
+    float DiversityScore(List<int> a, List<int> b)
+    {
+        var setA = new HashSet<int>(a);
+        var setB = new HashSet<int>(b);
+        int intersection = 0;
+        foreach (var x in setA)
+            if (setB.Contains(x)) intersection++;
+        int union = setA.Count + setB.Count - intersection;
+        if (union == 0) return 0f;
+        return 1f - (float)intersection / union;
     }
 
     // ============================================================
