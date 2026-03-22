@@ -157,6 +157,11 @@ public class DebugDisplay : MonoBehaviour
                 speedLevel = dodeca.speedLevel;
                 planeNames = Dodecaplex.planeNames;
             }
+            var fanoQ3 = activeShape.GetComponent<FanoQ3Animator>();
+            if (fanoQ3 != null)
+            {
+                shapeName = "FanoQ3Animator";
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
@@ -188,7 +193,16 @@ public class DebugDisplay : MonoBehaviour
             }
             else
             {
-                sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+                var fanoQ3Dbg = activeShape.GetComponent<FanoQ3Animator>();
+                if (fanoQ3Dbg != null)
+                {
+                    sb.AppendLine($"Shape: {shapeName}");
+                    sb.AppendLine(fanoQ3Dbg.GetDebugInfo());
+                }
+                else
+                {
+                    sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+                }
             }
         }
         else

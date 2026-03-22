@@ -24,7 +24,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph", "FanoQ3Animator" };
 
     // Grid
     GameObject gridRoot;
@@ -304,6 +304,9 @@ public class ShapeManager : MonoBehaviour
         var petersen = shapes[currentIndex].GetComponent<PetersenGraph>();
         if (petersen != null) return "Graph";
 
+        var fanoQ3 = shapes[currentIndex].GetComponent<FanoQ3Animator>();
+        if (fanoQ3 != null) return FanoQ3Animator.speedNames[0]; // shown in param label
+
         return "Normal";
     }
 
@@ -335,6 +338,9 @@ public class ShapeManager : MonoBehaviour
 
         var petersen = shapes[currentIndex].GetComponent<PetersenGraph>();
         if (petersen != null) return petersen.GetParamLabel();
+
+        var fanoQ3 = shapes[currentIndex].GetComponent<FanoQ3Animator>();
+        if (fanoQ3 != null) return fanoQ3.GetParamLabel();
 
         return "";
     }
