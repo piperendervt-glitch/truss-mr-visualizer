@@ -16,6 +16,10 @@ public class DebugDisplay : MonoBehaviour
     GameObject canvasGo;
     TextMeshProUGUI debugTMP;
 
+    // Phi bar graph
+    Image phiBarFill;
+    GameObject phiBarRoot;
+
     // FPS
     int frameCount;
     float fpsTimer;
@@ -61,6 +65,41 @@ public class DebugDisplay : MonoBehaviour
         bgRT.anchorMax = Vector2.one;
         bgRT.offsetMin = Vector2.zero;
         bgRT.offsetMax = Vector2.zero;
+
+        // Phi bar graph (hidden by default, shown for FanoQ3)
+        phiBarRoot = new GameObject("PhiBarRoot");
+        phiBarRoot.transform.SetParent(canvasGo.transform, false);
+        var phiBarRT = phiBarRoot.AddComponent<RectTransform>();
+        phiBarRT.anchorMin = new Vector2(0f, 0f);
+        phiBarRT.anchorMax = new Vector2(0f, 0f);
+        phiBarRT.pivot = new Vector2(0f, 0f);
+        phiBarRT.anchoredPosition = new Vector2(10, 10);
+        phiBarRT.sizeDelta = new Vector2(200, 16);
+
+        // Bar background
+        var barBg = new GameObject("PhiBarBG");
+        barBg.transform.SetParent(phiBarRoot.transform, false);
+        var barBgImg = barBg.AddComponent<Image>();
+        barBgImg.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+        var barBgRT = barBg.GetComponent<RectTransform>();
+        barBgRT.anchorMin = Vector2.zero;
+        barBgRT.anchorMax = Vector2.one;
+        barBgRT.offsetMin = Vector2.zero;
+        barBgRT.offsetMax = Vector2.zero;
+
+        // Bar fill
+        var barFill = new GameObject("PhiBarFill");
+        barFill.transform.SetParent(phiBarRoot.transform, false);
+        phiBarFill = barFill.AddComponent<Image>();
+        phiBarFill.color = Color.green;
+        var barFillRT = barFill.GetComponent<RectTransform>();
+        barFillRT.anchorMin = Vector2.zero;
+        barFillRT.anchorMax = new Vector2(1f, 1f);
+        barFillRT.pivot = new Vector2(0f, 0.5f);
+        barFillRT.offsetMin = Vector2.zero;
+        barFillRT.offsetMax = Vector2.zero;
+
+        phiBarRoot.SetActive(false);
 
         canvasGo.SetActive(false);
     }
@@ -173,6 +212,7 @@ public class DebugDisplay : MonoBehaviour
             var thomasDbg = activeShape.GetComponent<ThomasAttractor>();
             if (lorenz != null)
             {
+                if (phiBarRoot != null) phiBarRoot.SetActive(false);
                 sb.AppendLine($"Shape: {shapeName}  dt:{lorenz.dt:F3}");
                 sb.AppendLine($"\u03c3:{lorenz.sigma:F1}  \u03c1:{lorenz.rho:F1}  \u03b2:{lorenz.beta:F2}");
                 float lv = lorenz.lyapunovExponent;
@@ -183,6 +223,7 @@ public class DebugDisplay : MonoBehaviour
             }
             else if (thomasDbg != null)
             {
+                if (phiBarRoot != null) phiBarRoot.SetActive(false);
                 sb.AppendLine($"Shape: {shapeName}  dt:{thomasDbg.dt:F3}");
                 sb.AppendLine($"b:{thomasDbg.b:F3}");
                 float lv = thomasDbg.lyapunovExponent;
@@ -198,16 +239,19 @@ public class DebugDisplay : MonoBehaviour
                 {
                     sb.AppendLine($"Shape: {shapeName}");
                     sb.AppendLine(fanoQ3Dbg.GetDebugInfo());
+                    UpdatePhiBar(fanoQ3Dbg.phiRate);
                 }
                 else
                 {
                     sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+                    if (phiBarRoot != null) phiBarRoot.SetActive(false);
                 }
             }
         }
         else
         {
             sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+            if (phiBarRoot != null) phiBarRoot.SetActive(false);
         }
 
         if (angles != null && planeNames != null)
@@ -234,6 +278,23 @@ public class DebugDisplay : MonoBehaviour
             sb.AppendLine(rotationSnapshot.GetSlotDisplay());
 
         debugTMP.text = sb.ToString();
+    }
+
+    void UpdatePhiBar(float phiRate)
+    {
+        if (phiBarRoot == null || phiBarFill == null) return;
+        phiBarRoot.SetActive(true);
+
+        float ratio = Mathf.Clamp01(phiRate / 100f);
+        var fillRT = phiBarFill.GetComponent<RectTransform>();
+        fillRT.anchorMax = new Vector2(ratio, 1f);
+
+        if (phiRate >= 95f)
+            phiBarFill.color = Color.green;
+        else if (phiRate >= 70f)
+            phiBarFill.color = Color.yellow;
+        else
+            phiBarFill.color = Color.red;
     }
 
     static string Lc(float v) { return v > 0.01f ? "red" : v < -0.01f ? "green" : "yellow"; }

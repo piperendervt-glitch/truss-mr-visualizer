@@ -19,9 +19,9 @@ public class FanoQ3Animator : MonoBehaviour
     int currentFrame;
     float frameTimer;
     float baseInterval = 0.05f; // 20fps
-    int speedIndex = 1; // 0=0.5x, 1=1x, 2=2x, 3=4x
-    static readonly float[] speedMultipliers = { 0.5f, 1f, 2f, 4f };
-    public static readonly string[] speedNames = { "0.5x", "1x", "2x", "4x" };
+    int speedIndex = 2; // 0=0.25x, 1=0.5x, 2=1x, 3=2x, 4=4x
+    static readonly float[] speedMultipliers = { 0.25f, 0.5f, 1f, 2f, 4f };
+    public static readonly string[] speedNames = { "0.25x", "0.5x", "1x", "2x", "4x" };
     bool playing = true;
     bool dataLoaded;
 
@@ -32,11 +32,21 @@ public class FanoQ3Animator : MonoBehaviour
     public int attackCount;
     public int successCount;
 
+    // Min/max tracking
+    public float phiMin = 100f;
+    public float energyMax = 0f;
+
     // Edge rendering
     LineRenderer[] edgeLines;
     int[][] edgeIndices; // vertex index pairs
     string[] edgeKeys;   // JSON key for each edge
     HashSet<string> attackedEdgesSet = new HashSet<string>();
+
+    // Attack edge recovery state (案C)
+    // Tracks which edges were attacked and their recovery progress
+    HashSet<string> activeAttackEdges = new HashSet<string>();
+    float[] edgeAttackLerp; // 1.0 = full orange, 0.0 = fully recovered
+    string prevPhase = "";
 
     // Phase flash overlay
     GameObject flashQuad;
@@ -395,6 +405,7 @@ public class FanoQ3Animator : MonoBehaviour
         if (edgeIndices == null) return;
 
         edgeLines = new LineRenderer[edgeIndices.Length];
+        edgeAttackLerp = new float[edgeIndices.Length];
         var mat = new Material(Shader.Find("Sprites/Default"));
 
         for (int i = 0; i < edgeIndices.Length; i++)
@@ -448,6 +459,12 @@ public class FanoQ3Animator : MonoBehaviour
     {
         currentFrame = 0;
         frameTimer = 0f;
+        phiMin = 100f;
+        energyMax = 0f;
+        activeAttackEdges.Clear();
+        if (edgeAttackLerp != null)
+            for (int i = 0; i < edgeAttackLerp.Length; i++)
+                edgeAttackLerp[i] = 0f;
         Debug.Log("FanoQ3: reset to frame 0");
     }
 
@@ -555,6 +572,23 @@ public class FanoQ3Animator : MonoBehaviour
         }
     }
 
+    static readonly Color orangeAttack = new Color(1f, 0.5f, 0f);
+
+    Color WeightToColor(float w)
+    {
+        // weight=1.0 → green, weight=0.5 → white, weight=0.0 → blue
+        if (w >= 0.5f)
+        {
+            float t = (w - 0.5f) * 2f;
+            return Color.Lerp(Color.white, Color.green, t);
+        }
+        else
+        {
+            float t = w * 2f;
+            return Color.Lerp(Color.blue, Color.white, t);
+        }
+    }
+
     void UpdateEdgeVisuals()
     {
         if (edgeLines == null) return;
@@ -566,6 +600,11 @@ public class FanoQ3Animator : MonoBehaviour
         attackCount = frame.attack_count;
         successCount = frame.success_count;
 
+        // Track min/max
+        phiMin = Mathf.Min(phiMin, phiRate);
+        energyMax = Mathf.Max(energyMax, energy);
+
+        // Detect phase transitions for attack edge management
         attackedEdgesSet.Clear();
         if (frame.attacked_edges != null)
         {
@@ -573,42 +612,68 @@ public class FanoQ3Animator : MonoBehaviour
                 attackedEdgesSet.Add(ae);
         }
 
+        // On entering attack phase: mark newly attacked edges
+        if (currentPhase == "attacking")
+        {
+            for (int i = 0; i < edgeKeys.Length; i++)
+            {
+                if (attackedEdgesSet.Contains(edgeKeys[i]))
+                {
+                    activeAttackEdges.Add(edgeKeys[i]);
+                    edgeAttackLerp[i] = 1f;
+                }
+            }
+        }
+
+        // During recovery: fade attack lerp toward 0
+        if (currentPhase == "recovering")
+        {
+            float fadeSpeed = 2f * Time.deltaTime; // ~0.5s to fully recover
+            for (int i = 0; i < edgeAttackLerp.Length; i++)
+            {
+                if (edgeAttackLerp[i] > 0f)
+                    edgeAttackLerp[i] = Mathf.Max(0f, edgeAttackLerp[i] - fadeSpeed);
+            }
+        }
+
+        // On converging: clear all attack state
+        if (currentPhase == "converging" && prevPhase == "recovering")
+        {
+            activeAttackEdges.Clear();
+            for (int i = 0; i < edgeAttackLerp.Length; i++)
+                edgeAttackLerp[i] = 0f;
+        }
+
+        prevPhase = currentPhase;
+
+        // Apply colors
         for (int i = 0; i < edgeLines.Length; i++)
         {
-            Color c;
-            bool isAttacked = attackedEdgesSet.Contains(edgeKeys[i]);
+            float w = 0.5f;
+            if (frame.weights != null)
+                frame.weights.TryGetValue(edgeKeys[i], out w);
 
-            if (isAttacked)
+            Color weightColor = WeightToColor(w);
+            float attackT = edgeAttackLerp[i];
+
+            Color c;
+            float width;
+            if (attackT > 0.01f)
             {
-                float flash = Mathf.PingPong(Time.time * 8f, 1f);
-                c = Color.Lerp(Color.yellow, Color.red, flash);
-                edgeLines[i].startWidth = 0.005f;
-                edgeLines[i].endWidth = 0.005f;
-            }
-            else if (frame.weights != null && frame.weights.TryGetValue(edgeKeys[i], out float w))
-            {
-                if (w >= 0.5f)
-                {
-                    float t = (w - 0.5f) * 2f;
-                    c = Color.Lerp(Color.white, Color.red, t);
-                }
-                else
-                {
-                    float t = w * 2f;
-                    c = Color.Lerp(Color.blue, Color.white, t);
-                }
-                edgeLines[i].startWidth = 0.002f;
-                edgeLines[i].endWidth = 0.002f;
+                // Lerp between orange (attacked) and weight color (recovered)
+                c = Color.Lerp(weightColor, orangeAttack, attackT);
+                width = Mathf.Lerp(0.002f, 0.006f, attackT);
             }
             else
             {
-                c = Color.white;
-                edgeLines[i].startWidth = 0.002f;
-                edgeLines[i].endWidth = 0.002f;
+                c = weightColor;
+                width = 0.002f;
             }
 
             edgeLines[i].startColor = c;
             edgeLines[i].endColor = c;
+            edgeLines[i].startWidth = width;
+            edgeLines[i].endWidth = width;
         }
     }
 
@@ -675,6 +740,7 @@ public class FanoQ3Animator : MonoBehaviour
             default: phaseColor = "cyan"; break;
         }
         return $"\u03c6: {phiRate:F1}%  E: {energy:F3}\n" +
-               $"Phase: <color={phaseColor}>{currentPhase}</color>  Attack: {attackCount}/{successCount}";
+               $"Phase: <color={phaseColor}>{currentPhase}</color>  Attack: {attackCount}/{successCount}\n" +
+               $"\u03c6 min: {phiMin:F1}%  E max: {energyMax:F3}";
     }
 }
