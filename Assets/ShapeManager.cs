@@ -126,10 +126,13 @@ public class ShapeManager : MonoBehaviour
             var currentActiveShape = (shapes != null && currentIndex < shapes.Length) ? shapes[currentIndex] : null;
             var lorenz = currentActiveShape != null ? currentActiveShape.GetComponent<LorenzAttractor>() : null;
             var thomas = currentActiveShape != null ? currentActiveShape.GetComponent<ThomasAttractor>() : null;
+            var fanoQ3Anim = currentActiveShape != null ? currentActiveShape.GetComponent<FanoQ3Animator>() : null;
             if (lorenz != null)
                 lorenz.ResetTrail();
             else if (thomas != null)
                 thomas.ResetTrail();
+            else if (fanoQ3Anim != null)
+                fanoQ3Anim.TogglePlayPause();
             else if (rotationSnapshot != null)
                 rotationSnapshot.SaveToCurrentSlot();
         }

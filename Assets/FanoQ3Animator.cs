@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.Networking;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 
@@ -21,6 +23,7 @@ public class FanoQ3Animator : MonoBehaviour
     static readonly float[] speedMultipliers = { 0.5f, 1f, 2f, 4f };
     public static readonly string[] speedNames = { "0.5x", "1x", "2x", "4x" };
     bool playing = true;
+    bool dataLoaded;
 
     // Current frame state (public for DebugDisplay)
     public string currentPhase = "";
@@ -38,7 +41,6 @@ public class FanoQ3Animator : MonoBehaviour
     // Phase flash overlay
     GameObject flashQuad;
     MeshRenderer flashRenderer;
-    float flashAlpha;
 
     bool placedOnStart;
     float rotSpeed = 60f;
@@ -51,28 +53,19 @@ public class FanoQ3Animator : MonoBehaviour
         new Vector3(+1,+1,-1), new Vector3(+1,+1,+1),
     };
 
-    // Fano plane lines
-    static readonly int[][] fanoLines = {
-        new[]{0,1,2}, new[]{0,3,4}, new[]{0,5,6},
-        new[]{1,3,5}, new[]{1,4,6}, new[]{2,3,6}, new[]{2,4,5}
-    };
-
     // JSON parsing classes
-    [System.Serializable]
     class AnimData
     {
         public GraphData graph;
         public FrameData[] frames;
     }
 
-    [System.Serializable]
     class GraphData
     {
         public string[] nodes;
         public string[][] edges;
     }
 
-    [System.Serializable]
     class FrameData
     {
         public string phase;
@@ -91,9 +84,8 @@ public class FanoQ3Animator : MonoBehaviour
             Destroy(child.gameObject);
 
         BuildVertexPositions();
-        LoadAnimationData();
-        SetupEdges();
         SetupFlashOverlay();
+        StartCoroutine(LoadAnimationDataAsync());
     }
 
     void BuildVertexPositions()
@@ -126,24 +118,55 @@ public class FanoQ3Animator : MonoBehaviour
         }
     }
 
-    void LoadAnimationData()
+    IEnumerator LoadAnimationDataAsync()
     {
         string path = Path.Combine(Application.streamingAssetsPath, "animation_data.json");
-        string json;
+        string json = null;
 
-        if (path.Contains("://") || path.Contains("jar:"))
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Android/Quest: StreamingAssets is inside the APK (jar:file://)
+        // Must use UnityWebRequest
+        Debug.Log("FanoQ3: Loading JSON via UnityWebRequest: " + path);
+        using (var req = UnityWebRequest.Get(path))
         {
-            // Android: use UnityWebRequest (handled via coroutine fallback)
-            // For simplicity, try direct read first
-            json = File.ReadAllText(path);
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                json = req.downloadHandler.text;
+                Debug.Log("FanoQ3: UnityWebRequest success, length=" + json.Length);
+            }
+            else
+            {
+                Debug.LogError("FanoQ3: Failed to load JSON: " + req.error);
+                yield break;
+            }
         }
-        else
+#else
+        // Editor / Standalone: direct file read
+        Debug.Log("FanoQ3: Loading JSON via File.ReadAllText: " + path);
+        try
         {
             json = File.ReadAllText(path);
+            Debug.Log("FanoQ3: File.ReadAllText success, length=" + json.Length);
         }
+        catch (System.Exception e)
+        {
+            Debug.LogError("FanoQ3: Failed to read JSON: " + e.Message);
+            yield break;
+        }
+#endif
 
-        // Parse JSON manually since Unity's JsonUtility doesn't handle dictionaries
+        // Parse on next frame to avoid stall
+        yield return null;
+
         animData = ParseAnimData(json);
+        json = null; // free memory
+
+        if (animData == null || animData.graph == null)
+        {
+            Debug.LogError("FanoQ3: ParseAnimData returned null");
+            yield break;
+        }
 
         // Build edge index mapping from node names to vertex indices
         var nodeIndex = new Dictionary<string, int>();
@@ -159,28 +182,34 @@ public class FanoQ3Animator : MonoBehaviour
             edgeIndices[i] = new[] { nodeIndex[n0], nodeIndex[n1] };
             edgeKeys[i] = $"({n0},{n1})";
         }
+
+        SetupEdges();
+        dataLoaded = true;
+
+        int frameCount = animData.frames != null ? animData.frames.Length : 0;
+        Debug.Log("FanoQ3: JSON loaded, frames=" + frameCount
+            + ", nodes=" + animData.graph.nodes.Length
+            + ", edges=" + animData.graph.edges.Length);
     }
 
-    // Minimal JSON parser for our specific format
+    // --- JSON Parser (unchanged) ---
+
     AnimData ParseAnimData(string json)
     {
         var data = new AnimData();
 
-        // Find nodes array
         int nodesStart = json.IndexOf("\"nodes\"");
         int arrStart = json.IndexOf('[', nodesStart);
         int arrEnd = FindMatchingBracket(json, arrStart);
         data.graph = new GraphData();
         data.graph.nodes = ParseStringArray(json.Substring(arrStart, arrEnd - arrStart + 1));
 
-        // Find edges array
         int edgesStart = json.IndexOf("\"edges\"");
         arrStart = json.IndexOf('[', edgesStart);
         arrEnd = FindMatchingBracket(json, arrStart);
         string edgesStr = json.Substring(arrStart, arrEnd - arrStart + 1);
         data.graph.edges = ParseEdgesArray(edgesStr);
 
-        // Find frames array
         int framesStart = json.IndexOf("\"frames\"");
         arrStart = json.IndexOf('[', framesStart);
         arrEnd = FindMatchingBracket(json, arrStart);
@@ -210,7 +239,7 @@ public class FanoQ3Animator : MonoBehaviour
     string[] ParseStringArray(string arr)
     {
         var result = new List<string>();
-        int i = 1; // skip [
+        int i = 1;
         while (i < arr.Length - 1)
         {
             int q1 = arr.IndexOf('"', i);
@@ -266,7 +295,6 @@ public class FanoQ3Animator : MonoBehaviour
         frame.attack_count = ExtractInt(obj, "attack_count");
         frame.success_count = ExtractInt(obj, "success_count");
 
-        // Parse weights dictionary
         int wStart = obj.IndexOf("\"weights\"");
         if (wStart >= 0)
         {
@@ -275,7 +303,6 @@ public class FanoQ3Animator : MonoBehaviour
             frame.weights = ParseWeightsDict(obj.Substring(dictStart, dictEnd - dictStart + 1));
         }
 
-        // Parse attacked_edges array
         int aeStart = obj.IndexOf("\"attacked_edges\"");
         if (aeStart >= 0)
         {
@@ -361,9 +388,11 @@ public class FanoQ3Animator : MonoBehaviour
         return 0f;
     }
 
+    // --- Edge setup (called after JSON load completes) ---
+
     void SetupEdges()
     {
-        if (animData == null || edgeIndices == null) return;
+        if (edgeIndices == null) return;
 
         edgeLines = new LineRenderer[edgeIndices.Length];
         var mat = new Material(Shader.Find("Sprites/Default"));
@@ -382,6 +411,8 @@ public class FanoQ3Animator : MonoBehaviour
             lr.endColor = Color.white;
             edgeLines[i] = lr;
         }
+
+        Debug.Log("FanoQ3: SetupEdges complete, lines=" + edgeLines.Length);
     }
 
     void SetupFlashOverlay()
@@ -406,6 +437,20 @@ public class FanoQ3Animator : MonoBehaviour
         transform.position = cam.transform.position + cam.transform.forward * 1.5f;
     }
 
+    // --- Public: called by ShapeManager to delegate A-short press ---
+    public void TogglePlayPause()
+    {
+        playing = !playing;
+        Debug.Log("FanoQ3: play=" + playing);
+    }
+
+    public void ResetPlayback()
+    {
+        currentFrame = 0;
+        frameTimer = 0f;
+        Debug.Log("FanoQ3: reset to frame 0");
+    }
+
     void Update()
     {
         if (!placedOnStart)
@@ -414,8 +459,7 @@ public class FanoQ3Animator : MonoBehaviour
             placedOnStart = true;
         }
 
-        if (animData == null || animData.frames == null || animData.frames.Length == 0)
-            return;
+        if (!dataLoaded) return;
 
         HandleInput();
         UpdateAnimation();
@@ -431,16 +475,15 @@ public class FanoQ3Animator : MonoBehaviour
 
         if (grabbed || MenuUI.isMenuOpen) return;
 
-        bool playToggle = false;
         bool resetPressed = false;
         float ry = 0f;
-        float rx = 0f, rxRot = 0f, ryRot = 0f;
+        float rxRot = 0f;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
         if (kb != null)
         {
-            if (kb.zKey.wasPressedThisFrame) playToggle = true;
+            // play/pause is handled via ShapeManager -> TogglePlayPause()
             if (kb.gKey.wasPressedThisFrame) resetPressed = true;
             if (kb.iKey.wasPressedThisFrame) ChangeSpeed(1);
             if (kb.kKey.wasPressedThisFrame) ChangeSpeed(-1);
@@ -448,13 +491,10 @@ public class FanoQ3Animator : MonoBehaviour
             if (kb.lKey.isPressed) rxRot = 1f;
         }
 #else
-        // A button: play/pause
+        // A button play/pause is handled by ShapeManager -> TogglePlayPause()
         var rightCtrl = XRController.rightHand;
         if (rightCtrl != null)
         {
-            var aBtn = rightCtrl.TryGetChildControl<ButtonControl>("primaryButton");
-            if (aBtn != null && aBtn.wasPressedThisFrame) playToggle = true;
-
             var stick = rightCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null)
             {
@@ -486,8 +526,7 @@ public class FanoQ3Animator : MonoBehaviour
         }
 #endif
 
-        if (playToggle) playing = !playing;
-        if (resetPressed) { currentFrame = 0; frameTimer = 0f; }
+        if (resetPressed) ResetPlayback();
 
         // 3D rotation
         transform.Rotate(Vector3.up, rxRot * rotSpeed * Time.deltaTime, Space.World);
@@ -541,7 +580,6 @@ public class FanoQ3Animator : MonoBehaviour
 
             if (isAttacked)
             {
-                // Yellow flash for attacked edges
                 float flash = Mathf.PingPong(Time.time * 8f, 1f);
                 c = Color.Lerp(Color.yellow, Color.red, flash);
                 edgeLines[i].startWidth = 0.005f;
@@ -549,15 +587,14 @@ public class FanoQ3Animator : MonoBehaviour
             }
             else if (frame.weights != null && frame.weights.TryGetValue(edgeKeys[i], out float w))
             {
-                // weight=1.0 → red, weight=0.5 → white, weight=0.0 → blue
                 if (w >= 0.5f)
                 {
-                    float t = (w - 0.5f) * 2f; // 0..1
+                    float t = (w - 0.5f) * 2f;
                     c = Color.Lerp(Color.white, Color.red, t);
                 }
                 else
                 {
-                    float t = w * 2f; // 0..1
+                    float t = w * 2f;
                     c = Color.Lerp(Color.blue, Color.white, t);
                 }
                 edgeLines[i].startWidth = 0.002f;
@@ -582,7 +619,6 @@ public class FanoQ3Animator : MonoBehaviour
         var cam = Camera.main;
         if (cam == null) return;
 
-        // Position flash quad in front of camera
         flashQuad.transform.position = cam.transform.position + cam.transform.forward * 0.3f;
         flashQuad.transform.rotation = cam.transform.rotation;
 
@@ -597,7 +633,7 @@ public class FanoQ3Animator : MonoBehaviour
                 float greenPulse = (Mathf.Sin(Time.time * 2f) + 1f) * 0.5f;
                 flashColor = new Color(0f, 1f, 0f, greenPulse * 0.1f);
                 break;
-            default: // converging
+            default:
                 flashColor = new Color(0, 0, 0, 0);
                 break;
         }
@@ -622,11 +658,15 @@ public class FanoQ3Animator : MonoBehaviour
     {
         string playState = playing ? "Play" : "Pause";
         string spd = speedNames[speedIndex];
-        return $"FanoQ3 [{playState}] [{spd}] F:{currentFrame}/{(animData != null ? animData.frames.Length : 0)}";
+        int total = (animData != null && animData.frames != null) ? animData.frames.Length : 0;
+        return $"FanoQ3 [{playState}] [{spd}] F:{currentFrame}/{total}";
     }
 
     public string GetDebugInfo()
     {
+        if (!dataLoaded)
+            return "Loading JSON...";
+
         string phaseColor;
         switch (currentPhase)
         {
