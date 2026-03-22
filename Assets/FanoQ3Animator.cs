@@ -19,9 +19,9 @@ public class FanoQ3Animator : MonoBehaviour
     int currentFrame;
     float frameTimer;
     float baseInterval = 0.05f; // 20fps
-    int speedIndex = 2; // 0=0.25x, 1=0.5x, 2=1x, 3=2x, 4=4x
-    static readonly float[] speedMultipliers = { 0.25f, 0.5f, 1f, 2f, 4f };
-    public static readonly string[] speedNames = { "0.25x", "0.5x", "1x", "2x", "4x" };
+    int speedIndex = 4; // 0=0.06x, 1=0.12x, 2=0.25x, 3=0.5x, 4=1x, 5=2x, 6=4x
+    static readonly float[] speedMultipliers = { 0.06f, 0.12f, 0.25f, 0.5f, 1f, 2f, 4f };
+    public static readonly string[] speedNames = { "0.06x", "0.12x", "0.25x", "0.5x", "1x", "2x", "4x" };
     bool playing = true;
     bool dataLoaded;
 
@@ -451,8 +451,19 @@ public class FanoQ3Animator : MonoBehaviour
     // --- Public: called by ShapeManager to delegate A-short press ---
     public void TogglePlayPause()
     {
-        playing = !playing;
-        Debug.Log("FanoQ3: play=" + playing);
+        if (!playing)
+        {
+            // Stopped: reset to beginning and start playing
+            ResetPlayback();
+            playing = true;
+            Debug.Log("FanoQ3: restart from frame 0");
+        }
+        else
+        {
+            // Playing: pause
+            playing = false;
+            Debug.Log("FanoQ3: paused at frame " + currentFrame);
+        }
     }
 
     public void ResetPlayback()
@@ -568,7 +579,13 @@ public class FanoQ3Animator : MonoBehaviour
             frameTimer -= interval;
             currentFrame++;
             if (currentFrame >= animData.frames.Length)
-                currentFrame = 0;
+            {
+                currentFrame = animData.frames.Length - 1;
+                playing = false;
+                frameTimer = 0f;
+                Debug.Log("FanoQ3: reached end, auto-stopped");
+                return;
+            }
         }
     }
 
