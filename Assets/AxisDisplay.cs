@@ -96,6 +96,14 @@ public class AxisDisplay : MonoBehaviour
             axisRoot.SetActive(false);
             return;
         }
+
+        // Hide axis when StagedAttackAnimator is active
+        if (activeShape.GetComponent<StagedAttackAnimator>() != null)
+        {
+            axisRoot.SetActive(false);
+            return;
+        }
+
         axisRoot.SetActive(true);
 
         Vector3 shapePos = activeShape.transform.position;

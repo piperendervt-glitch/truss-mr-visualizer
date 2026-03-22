@@ -262,7 +262,7 @@ public class StagedAttackAnimator : MonoBehaviour
 
             // Title label above graph
             view.titleLabel = CreateWorldLabel(view.root.transform,
-                labels[s], new Vector3(0f, 0.18f, 0f), 0.04f, Color.yellow);
+                labels[s], new Vector3(0f, 0.12f, 0f), 0.07f, Color.yellow);
 
             // Stats label below graph
             view.statsLabel = CreateWorldLabel(view.root.transform,
@@ -350,11 +350,23 @@ public class StagedAttackAnimator : MonoBehaviour
         Debug.Log("Staged: reset to frame 0");
     }
 
+    void PlaceInFrontOfCamera()
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+        transform.position = cam.transform.position + cam.transform.forward * 0.8f;
+    }
+
     void Update()
     {
         if (!placedOnStart)
         {
-            placedOnStart = true;
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                PlaceInFrontOfCamera();
+                placedOnStart = true;
+            }
         }
 
         if (!dataLoaded) return;
@@ -405,7 +417,10 @@ public class StagedAttackAnimator : MonoBehaviour
         if (leftCtrl != null)
         {
             var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
-            if (grip != null && grip.ReadValue() > 0.5f) resetPressed = true;
+            if (grip != null && grip.ReadValue() > 0.5f)
+            {
+                PlaceInFrontOfCamera();
+            }
         }
 
         if (Mathf.Abs(ry) > 0.7f)
