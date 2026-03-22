@@ -24,7 +24,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph" };
 
     // Grid
     GameObject gridRoot;
@@ -295,6 +295,15 @@ public class ShapeManager : MonoBehaviour
         var thomas = shapes[currentIndex].GetComponent<ThomasAttractor>();
         if (thomas != null) return $"dt:{thomas.dt:F3}";
 
+        var fano = shapes[currentIndex].GetComponent<FanoGraph>();
+        if (fano != null) return "Graph";
+
+        var fanoK2 = shapes[currentIndex].GetComponent<FanoK2Graph>();
+        if (fanoK2 != null) return "Graph";
+
+        var petersen = shapes[currentIndex].GetComponent<PetersenGraph>();
+        if (petersen != null) return "Graph";
+
         return "Normal";
     }
 
@@ -317,6 +326,15 @@ public class ShapeManager : MonoBehaviour
 
         var thomas = shapes[currentIndex].GetComponent<ThomasAttractor>();
         if (thomas != null) return thomas.GetParamLabel();
+
+        var fano = shapes[currentIndex].GetComponent<FanoGraph>();
+        if (fano != null) return fano.GetParamLabel();
+
+        var fanoK2 = shapes[currentIndex].GetComponent<FanoK2Graph>();
+        if (fanoK2 != null) return fanoK2.GetParamLabel();
+
+        var petersen = shapes[currentIndex].GetComponent<PetersenGraph>();
+        if (petersen != null) return petersen.GetParamLabel();
 
         return "";
     }
