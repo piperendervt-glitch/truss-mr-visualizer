@@ -24,7 +24,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph", "FanoQ3Animator" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph", "FanoQ3Animator", "StagedAttack" };
 
     // Grid
     GameObject gridRoot;
@@ -127,12 +127,15 @@ public class ShapeManager : MonoBehaviour
             var lorenz = currentActiveShape != null ? currentActiveShape.GetComponent<LorenzAttractor>() : null;
             var thomas = currentActiveShape != null ? currentActiveShape.GetComponent<ThomasAttractor>() : null;
             var fanoQ3Anim = currentActiveShape != null ? currentActiveShape.GetComponent<FanoQ3Animator>() : null;
+            var stagedAnim = currentActiveShape != null ? currentActiveShape.GetComponent<StagedAttackAnimator>() : null;
             if (lorenz != null)
                 lorenz.ResetTrail();
             else if (thomas != null)
                 thomas.ResetTrail();
             else if (fanoQ3Anim != null)
                 fanoQ3Anim.TogglePlayPause();
+            else if (stagedAnim != null)
+                stagedAnim.TogglePlayPause();
             else if (rotationSnapshot != null)
                 rotationSnapshot.SaveToCurrentSlot();
         }
@@ -310,6 +313,9 @@ public class ShapeManager : MonoBehaviour
         var fanoQ3 = shapes[currentIndex].GetComponent<FanoQ3Animator>();
         if (fanoQ3 != null) return FanoQ3Animator.speedNames[0]; // shown in param label
 
+        var staged = shapes[currentIndex].GetComponent<StagedAttackAnimator>();
+        if (staged != null) return StagedAttackAnimator.speedNames[0]; // shown in param label
+
         return "Normal";
     }
 
@@ -344,6 +350,9 @@ public class ShapeManager : MonoBehaviour
 
         var fanoQ3 = shapes[currentIndex].GetComponent<FanoQ3Animator>();
         if (fanoQ3 != null) return fanoQ3.GetParamLabel();
+
+        var staged = shapes[currentIndex].GetComponent<StagedAttackAnimator>();
+        if (staged != null) return staged.GetParamLabel();
 
         return "";
     }

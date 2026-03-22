@@ -201,6 +201,11 @@ public class DebugDisplay : MonoBehaviour
             {
                 shapeName = "FanoQ3Animator";
             }
+            var staged = activeShape.GetComponent<StagedAttackAnimator>();
+            if (staged != null)
+            {
+                shapeName = "StagedAttack";
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
@@ -235,11 +240,18 @@ public class DebugDisplay : MonoBehaviour
             else
             {
                 var fanoQ3Dbg = activeShape.GetComponent<FanoQ3Animator>();
+                var stagedDbg = activeShape.GetComponent<StagedAttackAnimator>();
                 if (fanoQ3Dbg != null)
                 {
                     sb.AppendLine($"Shape: {shapeName}");
                     sb.AppendLine(fanoQ3Dbg.GetDebugInfo());
                     UpdatePhiBar(fanoQ3Dbg.phiRate);
+                }
+                else if (stagedDbg != null)
+                {
+                    sb.AppendLine($"Shape: {shapeName}");
+                    sb.AppendLine(stagedDbg.GetDebugInfo());
+                    if (phiBarRoot != null) phiBarRoot.SetActive(false);
                 }
                 else
                 {
