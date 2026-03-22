@@ -20,9 +20,9 @@ public class StagedAttackAnimator : MonoBehaviour
 
     // Scenario positions (local to this object)
     static readonly Vector3[] scenarioOffsets = {
-        new Vector3(-0.3f, 0f, 0f),
+        new Vector3(-0.2f, 0f, 0f),
         new Vector3( 0.0f, 0f, 0f),
-        new Vector3(+0.3f, 0f, 0f),
+        new Vector3(+0.2f, 0f, 0f),
     };
 
     // Animation data
@@ -235,9 +235,9 @@ public class StagedAttackAnimator : MonoBehaviour
 
     // Background panel colors per scenario
     static readonly Color[] bgColors = {
-        new Color(0f, 1f, 0f, 0.1f),   // 10%: light green
-        new Color(1f, 1f, 0f, 0.1f),   // 20%: light yellow
-        new Color(1f, 0f, 0f, 0.1f),   // 50%: light red
+        new Color(0f, 1f, 0f, 0.06f),  // 10%: light green
+        new Color(1f, 1f, 0f, 0.06f),  // 20%: light yellow
+        new Color(1f, 0f, 0f, 0.06f),  // 50%: light red
     };
 
     void SetupScenarioViews(int[][] indices, string[] keys)
@@ -264,7 +264,7 @@ public class StagedAttackAnimator : MonoBehaviour
             bgGo.name = "BgPanel";
             bgGo.transform.SetParent(view.root.transform, false);
             bgGo.transform.localPosition = new Vector3(0f, 0f, 0.02f);
-            bgGo.transform.localScale = new Vector3(0.28f, 0.28f, 1f);
+            bgGo.transform.localScale = new Vector3(0.18f, 0.18f, 1f);
             Object.Destroy(bgGo.GetComponent<Collider>());
             var bgMat = new Material(Shader.Find("Sprites/Default"));
             bgMat.color = bgColors[s];
@@ -302,11 +302,11 @@ public class StagedAttackAnimator : MonoBehaviour
 
             // Title label above graph
             view.titleLabel = CreateWorldLabel(view.root.transform,
-                labels[s], new Vector3(0f, 0.12f, 0f), 0.07f, Color.yellow);
+                labels[s], new Vector3(0f, 0.12f, 0f), 0.09f, Color.yellow);
 
             // Stats label below graph
             view.statsLabel = CreateWorldLabel(view.root.transform,
-                "", new Vector3(0f, -0.18f, 0f), 0.025f, Color.white);
+                "", new Vector3(0f, -0.18f, 0f), 0.038f, Color.white);
 
             // Result label (center of graph, hidden by default)
             view.resultLabel = CreateWorldLabel(view.root.transform,
