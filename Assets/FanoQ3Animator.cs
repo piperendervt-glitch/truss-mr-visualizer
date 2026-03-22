@@ -453,14 +453,24 @@ public class FanoQ3Animator : MonoBehaviour
     {
         if (!playing)
         {
-            // Stopped: reset to beginning and start playing
-            ResetPlayback();
-            playing = true;
-            Debug.Log("FanoQ3: restart from frame 0");
+            // At last frame: reset and play from beginning
+            if (animData != null && animData.frames != null
+                && currentFrame >= animData.frames.Length - 1)
+            {
+                ResetPlayback();
+                playing = true;
+                Debug.Log("FanoQ3: restart from frame 0");
+            }
+            else
+            {
+                // Paused mid-playback: resume from current frame
+                playing = true;
+                Debug.Log("FanoQ3: resumed at frame " + currentFrame);
+            }
         }
         else
         {
-            // Playing: pause
+            // Playing: pause, keep frame position
             playing = false;
             Debug.Log("FanoQ3: paused at frame " + currentFrame);
         }
