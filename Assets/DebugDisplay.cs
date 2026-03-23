@@ -235,6 +235,11 @@ public class DebugDisplay : MonoBehaviour
             {
                 shapeName = "StagedAttack";
             }
+            var morse = activeShape.GetComponent<MorseLandscape1D>();
+            if (morse != null)
+            {
+                shapeName = "MorseLandscape1D";
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
@@ -284,10 +289,19 @@ public class DebugDisplay : MonoBehaviour
                 }
                 else
                 {
-                    sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
-                    if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                    var morseDbg = activeShape.GetComponent<MorseLandscape1D>();
+                    if (morseDbg != null)
+                    {
+                        sb.AppendLine($"Shape: {shapeName}");
+                        sb.AppendLine(morseDbg.GetDebugInfo());
+                        if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                    }
+                    else
+                    {
+                        sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+                        if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                    }
                 }
-            }
         }
         else
         {
