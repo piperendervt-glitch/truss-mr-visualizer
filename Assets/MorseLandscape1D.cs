@@ -472,16 +472,19 @@ public class MorseLandscape1D : MonoBehaviour
         float speed = 0.15f; // fw units per second
 
         // Attraction to critical points: slow down near minima
+        // Full stick input (>0.8) overrides attraction — lets user break free
         float attractionFactor = 1f;
-        for (int i = 0; i < criticalFw.Length; i++)
+        if (Mathf.Abs(stickY) <= 0.8f)
         {
-            float dist = Mathf.Abs(currentFw - criticalFw[i]);
-            if (dist < 0.01f)
+            for (int i = 0; i < criticalFw.Length; i++)
             {
-                // Attract: pull toward minimum
-                float pull = (criticalFw[i] - currentFw) * 3f;
-                currentFw += pull * Time.deltaTime;
-                attractionFactor = 0.3f; // slow down
+                float dist = Mathf.Abs(currentFw - criticalFw[i]);
+                if (dist < 0.005f)
+                {
+                    float pull = (criticalFw[i] - currentFw) * 1.5f;
+                    currentFw += pull * Time.deltaTime;
+                    attractionFactor = 0.6f;
+                }
             }
         }
 
