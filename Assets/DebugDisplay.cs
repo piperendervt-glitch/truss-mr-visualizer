@@ -302,6 +302,7 @@ public class DebugDisplay : MonoBehaviour
                         if (phiBarRoot != null) phiBarRoot.SetActive(false);
                     }
                 }
+            }
         }
         else
         {
