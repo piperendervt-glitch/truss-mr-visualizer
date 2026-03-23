@@ -337,16 +337,20 @@ public class MorseLandscape1D : MonoBehaviour
         minMarkers = new GameObject[count];
         minLabels = new TextMeshPro[count];
 
+        float[] markerOffsetY = { 0.02f, 0.04f }; // stagger heights to avoid overlap
+
         for (int i = 0; i < count; i++)
         {
             Vector3 pos = FwLossToLocal(criticalFw[i], criticalLoss[i]);
+            float offsetY = i < markerOffsetY.Length ? markerOffsetY[i] : 0.02f + i * 0.02f;
+            Vector3 markerPos = pos + Vector3.up * offsetY;
 
-            // Yellow sphere
+            // Yellow sphere (radius 0.015m)
             var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             sphere.name = "MinMarker_" + i;
             sphere.transform.SetParent(transform, false);
-            sphere.transform.localPosition = pos;
-            sphere.transform.localScale = Vector3.one * 0.02f; // radius 0.01m
+            sphere.transform.localPosition = markerPos;
+            sphere.transform.localScale = Vector3.one * 0.03f; // radius 0.015m
             var mr = sphere.GetComponent<MeshRenderer>();
             mr.material = new Material(Shader.Find("Sprites/Default"));
             mr.material.color = Color.yellow;
@@ -355,16 +359,16 @@ public class MorseLandscape1D : MonoBehaviour
             if (col != null) Destroy(col);
             minMarkers[i] = sphere;
 
-            // Label
+            // Label with individual fw value
             var labelGo = new GameObject("MinLabel_" + i);
             labelGo.transform.SetParent(transform, false);
             var tmp = labelGo.AddComponent<TextMeshPro>();
-            tmp.text = "min";
+            tmp.text = $"min{i + 1}: fw={criticalFw[i]:F3}";
             tmp.fontSize = 0.06f;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.color = Color.yellow;
-            tmp.rectTransform.sizeDelta = new Vector2(0.1f, 0.04f);
-            labelGo.transform.localPosition = pos + Vector3.up * 0.025f;
+            tmp.rectTransform.sizeDelta = new Vector2(0.2f, 0.04f);
+            labelGo.transform.localPosition = markerPos + Vector3.up * 0.025f;
             minLabels[i] = tmp;
         }
     }
