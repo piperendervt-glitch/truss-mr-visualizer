@@ -97,8 +97,9 @@ public class AxisDisplay : MonoBehaviour
             return;
         }
 
-        // Hide axis when StagedAttackAnimator is active
-        if (activeShape.GetComponent<StagedAttackAnimator>() != null)
+        // Hide axis when StagedAttackAnimator or CorrectionStrengthAnalyzer is active
+        if (activeShape.GetComponent<StagedAttackAnimator>() != null
+            || activeShape.GetComponent<CorrectionStrengthAnalyzer>() != null)
         {
             axisRoot.SetActive(false);
             return;

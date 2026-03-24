@@ -24,7 +24,7 @@ public class ShapeManager : MonoBehaviour
     // Background mode: 0=MR, 1=VR Black, 2=VR Grid
     int bgMode;
     string[] bgModeNames = { "VR Grid", "MR", "VR Black" };
-    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph", "FanoQ3Animator", "StagedAttack", "MorseLandscape1D" };
+    string[] shapeNames = { "Tesseract", "Hexadecachoron", "Dodecaplex", "LorenzAttractor", "ThomasAttractor", "FanoGraph", "FanoK2Graph", "PetersenGraph", "FanoQ3Animator", "StagedAttack", "MorseLandscape1D", "CSAnalyzer" };
 
     // Grid
     GameObject gridRoot;
@@ -319,6 +319,9 @@ public class ShapeManager : MonoBehaviour
         var morse = shapes[currentIndex].GetComponent<MorseLandscape1D>();
         if (morse != null) return "Landscape";
 
+        var csAnalyzer = shapes[currentIndex].GetComponent<CorrectionStrengthAnalyzer>();
+        if (csAnalyzer != null) return "Lyapunov";
+
         return "Normal";
     }
 
@@ -359,6 +362,9 @@ public class ShapeManager : MonoBehaviour
 
         var morse = shapes[currentIndex].GetComponent<MorseLandscape1D>();
         if (morse != null) return morse.GetParamLabel();
+
+        var csAnalyzer = shapes[currentIndex].GetComponent<CorrectionStrengthAnalyzer>();
+        if (csAnalyzer != null) return csAnalyzer.GetParamLabel();
 
         return "";
     }

@@ -240,6 +240,11 @@ public class DebugDisplay : MonoBehaviour
             {
                 shapeName = "MorseLandscape1D";
             }
+            var csAnalyzer = activeShape.GetComponent<CorrectionStrengthAnalyzer>();
+            if (csAnalyzer != null)
+            {
+                shapeName = "CSAnalyzer";
+            }
         }
 
         string[] speedNames = { "Slow", "Normal", "Fast" };
@@ -298,8 +303,18 @@ public class DebugDisplay : MonoBehaviour
                     }
                     else
                     {
-                        sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
-                        if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                        var csDbg = activeShape.GetComponent<CorrectionStrengthAnalyzer>();
+                        if (csDbg != null)
+                        {
+                            sb.AppendLine($"Shape: {shapeName}");
+                            sb.AppendLine(csDbg.GetDebugInfo());
+                            if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                        }
+                        else
+                        {
+                            sb.AppendLine($"Shape: {shapeName}  Speed: {speedNames[speedLevel]}");
+                            if (phiBarRoot != null) phiBarRoot.SetActive(false);
+                        }
                     }
                 }
             }
