@@ -128,6 +128,7 @@ public class ShapeManager : MonoBehaviour
             var thomas = currentActiveShape != null ? currentActiveShape.GetComponent<ThomasAttractor>() : null;
             var fanoQ3Anim = currentActiveShape != null ? currentActiveShape.GetComponent<FanoQ3Animator>() : null;
             var stagedAnim = currentActiveShape != null ? currentActiveShape.GetComponent<StagedAttackAnimator>() : null;
+            var csAnalyzer = currentActiveShape != null ? currentActiveShape.GetComponent<CorrectionStrengthAnalyzer>() : null;
             if (lorenz != null)
                 lorenz.ResetTrail();
             else if (thomas != null)
@@ -136,6 +137,8 @@ public class ShapeManager : MonoBehaviour
                 fanoQ3Anim.TogglePlayPause();
             else if (stagedAnim != null)
                 stagedAnim.TogglePlayPause();
+            else if (csAnalyzer != null)
+                csAnalyzer.ResetMarker();
             else if (rotationSnapshot != null)
                 rotationSnapshot.SaveToCurrentSlot();
         }

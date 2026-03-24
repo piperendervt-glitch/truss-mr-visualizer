@@ -659,29 +659,57 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // ============================================================
     void Update()
     {
+        // Place in front of HMD on first frame (before dataLoaded)
         if (!placedOnStart)
         {
             var cam = Camera.main;
             if (cam != null)
             {
-                transform.position = cam.transform.position + cam.transform.forward * 1.5f;
+                transform.position = cam.transform.position + cam.transform.forward * 0.8f;
                 placedOnStart = true;
+                Debug.Log("CSAnalyzer: Initial placement at 0.8m in front of HMD");
             }
         }
 
+        // Left grip: reposition in front of HMD (works even before dataLoaded)
+        HandleGrip();
+
         if (!dataLoaded) return;
 
-        HandleInput();
+        HandleStickInput();
         UpdateMarkerPositions();
         UpdateStats();
         BillboardLabels();
     }
 
-    void HandleInput()
+    void HandleGrip()
+    {
+        bool gripPressed = false;
+
+#if UNITY_EDITOR
+        var kb = Keyboard.current;
+        if (kb != null && kb.gKey.isPressed) gripPressed = true;
+#else
+        var leftCtrl = XRController.leftHand;
+        if (leftCtrl != null)
+        {
+            var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
+            if (grip != null && grip.ReadValue() > 0.8f)
+                gripPressed = true;
+        }
+#endif
+
+        if (gripPressed)
+        {
+            var cam = Camera.main;
+            if (cam != null)
+                transform.position = cam.transform.position + cam.transform.forward * 0.8f;
+        }
+    }
+
+    void HandleStickInput()
     {
         float stickX = 0f;
-        bool resetPressed = false;
-        bool gripPressed = false;
 
 #if UNITY_EDITOR
         var kb = Keyboard.current;
@@ -689,8 +717,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         {
             if (kb.rightArrowKey.isPressed) stickX = 1f;
             if (kb.leftArrowKey.isPressed) stickX = -1f;
-            if (kb.rKey.wasPressedThisFrame) resetPressed = true;
-            if (kb.gKey.wasPressedThisFrame) gripPressed = true;
         }
 #else
         var rightCtrl = XRController.rightHand;
@@ -699,18 +725,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             var stick = rightCtrl.TryGetChildControl<StickControl>("thumbstick");
             if (stick != null)
                 stickX = stick.ReadValue().x;
-
-            var aBtn = rightCtrl.TryGetChildControl<ButtonControl>("primaryButton");
-            if (aBtn != null && aBtn.wasPressedThisFrame)
-                resetPressed = true;
-        }
-
-        var leftCtrl = XRController.leftHand;
-        if (leftCtrl != null)
-        {
-            var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
-            if (grip != null && grip.ReadValue() > 0.5f)
-                gripPressed = true;
         }
 #endif
 
@@ -721,21 +735,14 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             interactiveCs += stickX * speed * Time.deltaTime;
             interactiveCs = Mathf.Clamp(interactiveCs, 0.10f, 1.05f);
         }
+    }
 
-        // A button: reset to cs=0.50
-        if (resetPressed)
-        {
-            interactiveCs = 0.50f;
-            debugMessage = "";
-        }
-
-        // Left grip: reposition in front of HMD
-        if (gripPressed)
-        {
-            var cam = Camera.main;
-            if (cam != null)
-                transform.position = cam.transform.position + cam.transform.forward * 1.5f;
-        }
+    // Called by ShapeManager on A-short press
+    public void ResetMarker()
+    {
+        interactiveCs = 0.50f;
+        debugMessage = "";
+        Debug.Log("CSAnalyzer: ResetMarker called, cs=0.50");
     }
 
     void UpdateStats()
