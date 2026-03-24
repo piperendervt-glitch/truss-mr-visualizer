@@ -4,7 +4,6 @@ using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Networking;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using TMPro;
 
@@ -14,9 +13,23 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     float[] csValues;
     float[] loopGains;
     float[] convergenceSteps;
-    Dictionary<string, float[]> trajectories;
     float threshold = 0.3f;
     bool dataLoaded;
+
+    // Trajectories — parallel arrays (no Dictionary)
+    static readonly string[] trajKeys = { "0.50", "0.70", "0.85", "0.95", "1.00", "1.05" };
+    float[][] trajData; // trajData[i] corresponds to trajKeys[i]
+    int trajMaxLen;     // cached max trajectory length
+
+    static readonly Color[] trajColors = {
+        Color.red,
+        new Color(1f, 0.5f, 0f),   // orange
+        Color.yellow,
+        Color.green,
+        new Color(0.6f, 0.2f, 1f), // purple
+        Color.white
+    };
+    static readonly float[] trajWidths = { 0.002f, 0.002f, 0.002f, 0.004f, 0.002f, 0.002f };
 
     // Key points
     float currentCs = 0.50f;
@@ -38,7 +51,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // Visualization objects
     LineRenderer gainCurveLR;
     LineRenderer stepsCurveLR;
-    LineRenderer[][] trajLRs; // 6 trajectories
     LineRenderer thresholdLineLR;
 
     // Markers
@@ -58,18 +70,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     bool placedOnStart;
     public string debugMessage = "";
 
-    // Trajectory colors
-    static readonly string[] trajKeys = { "0.50", "0.70", "0.85", "0.95", "1.00", "1.05" };
-    static readonly Color[] trajColors = {
-        Color.red,
-        new Color(1f, 0.5f, 0f),   // orange
-        Color.yellow,
-        Color.green,
-        new Color(0.6f, 0.2f, 1f), // purple
-        Color.white
-    };
-    static readonly float[] trajWidths = { 0.002f, 0.002f, 0.002f, 0.004f, 0.002f, 0.002f };
-
     void Start()
     {
         foreach (Transform child in transform)
@@ -83,6 +83,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         string path = Path.Combine(Application.streamingAssetsPath, "cs_analysis_unity.json");
         string json = null;
 
+        Debug.Log("CSAnalyzer: streamingAssetsPath=" + Application.streamingAssetsPath);
+        Debug.Log("CSAnalyzer: full path=" + path);
+
 #if UNITY_ANDROID && !UNITY_EDITOR
         Debug.Log("CSAnalyzer: Loading JSON via UnityWebRequest: " + path);
         using (var req = UnityWebRequest.Get(path))
@@ -95,7 +98,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             }
             else
             {
-                Debug.LogError("CSAnalyzer: Failed to load JSON: " + req.error);
+                Debug.LogError("CSAnalyzer: UnityWebRequest FAILED: " + req.error + " url=" + req.url);
                 yield break;
             }
         }
@@ -108,115 +111,189 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogError("CSAnalyzer: Failed to read JSON: " + e.Message);
+            Debug.LogError("CSAnalyzer: File.ReadAllText FAILED: " + e.Message);
             yield break;
         }
 #endif
 
         yield return null;
 
+        Debug.Log("CSAnalyzer: Starting parse...");
         ParseJson(json);
         json = null;
 
-        if (csValues == null || loopGains == null || convergenceSteps == null)
+        if (csValues == null)
         {
-            Debug.LogError("CSAnalyzer: Parse failed");
+            Debug.LogError("CSAnalyzer: Parse failed — csValues is null");
+            yield break;
+        }
+        if (loopGains == null)
+        {
+            Debug.LogError("CSAnalyzer: Parse failed — loopGains is null");
+            yield break;
+        }
+        if (convergenceSteps == null)
+        {
+            Debug.LogError("CSAnalyzer: Parse failed — convergenceSteps is null");
             yield break;
         }
 
-        BuildGainGraph();
-        BuildStepsGraph();
-        BuildTrajectoryGraph();
-        BuildMarkers();
-        BuildStatsDisplay();
-        dataLoaded = true;
+        Debug.Log("CSAnalyzer: Parse OK. cs_count=" + csValues.Length
+            + " gains_count=" + loopGains.Length
+            + " steps_count=" + convergenceSteps.Length
+            + " traj_count=" + CountLoadedTrajectories()
+            + " trajMaxLen=" + trajMaxLen);
 
-        Debug.Log("CSAnalyzer: Ready, points=" + csValues.Length);
+        BuildGainGraph();
+        Debug.Log("CSAnalyzer: GainGraph built");
+        BuildStepsGraph();
+        Debug.Log("CSAnalyzer: StepsGraph built");
+        BuildTrajectoryGraph();
+        Debug.Log("CSAnalyzer: TrajectoryGraph built");
+        BuildMarkers();
+        Debug.Log("CSAnalyzer: Markers built");
+        BuildStatsDisplay();
+        Debug.Log("CSAnalyzer: StatsDisplay built");
+
+        dataLoaded = true;
+        Debug.Log("CSAnalyzer: dataLoaded=true, JSON loaded, cs_count=" + csValues.Length);
     }
 
-    // --- JSON parsing ---
+    int CountLoadedTrajectories()
+    {
+        if (trajData == null) return 0;
+        int c = 0;
+        for (int i = 0; i < trajData.Length; i++)
+            if (trajData[i] != null) c++;
+        return c;
+    }
+
+    // ============================================================
+    // JSON parsing — all manual, no JsonUtility, no Dictionary
+    // ============================================================
     void ParseJson(string json)
     {
         csValues = ParseFloatArray(json, "cs_values");
-        loopGains = ParseFloatArray(json, "loop_gains");
+        Debug.Log("CSAnalyzer: parsed cs_values: " + (csValues != null ? csValues.Length.ToString() : "null"));
 
-        // Parse convergence_steps as float array then convert
-        float[] stepsFloat = ParseFloatArray(json, "convergence_steps");
-        if (stepsFloat != null)
-        {
-            convergenceSteps = stepsFloat;
-        }
+        loopGains = ParseFloatArray(json, "loop_gains");
+        Debug.Log("CSAnalyzer: parsed loop_gains: " + (loopGains != null ? loopGains.Length.ToString() : "null"));
+
+        convergenceSteps = ParseFloatArray(json, "convergence_steps");
+        Debug.Log("CSAnalyzer: parsed convergence_steps: " + (convergenceSteps != null ? convergenceSteps.Length.ToString() : "null"));
 
         threshold = ParseScalar(json, "threshold", 0.3f);
+        Debug.Log("CSAnalyzer: threshold=" + threshold);
 
-        // Parse key points
-        currentGain = ParseNestedScalar(json, "current", "gain", 0.1483f);
-        currentSteps = (int)ParseNestedScalar(json, "current", "steps", 6);
-        optimalGain = ParseNestedScalar(json, "optimal", "gain", 0.0148f);
-        optimalSteps = (int)ParseNestedScalar(json, "optimal", "steps", 2);
-
-        // Parse trajectories
-        trajectories = new Dictionary<string, float[]>();
-        for (int i = 0; i < trajKeys.Length; i++)
+        // Parse key points (search within "key_points" section)
+        int kpIdx = json.IndexOf("\"key_points\"");
+        if (kpIdx >= 0)
         {
-            float[] traj = ParseTrajectory(json, trajKeys[i]);
-            if (traj != null)
-                trajectories[trajKeys[i]] = traj;
+            // Find the opening brace of key_points object
+            int kpBrace = json.IndexOf('{', kpIdx);
+            // Find matching closing brace (nested objects)
+            int kpEnd = FindMatchingBrace(json, kpBrace);
+            string kpSection = json.Substring(kpBrace, kpEnd - kpBrace + 1);
+
+            currentGain = ParseNestedValue(kpSection, "current", "gain", 0.1483f);
+            currentSteps = (int)ParseNestedValue(kpSection, "current", "steps", 6);
+            optimalGain = ParseNestedValue(kpSection, "optimal", "gain", 0.0148f);
+            optimalSteps = (int)ParseNestedValue(kpSection, "optimal", "steps", 2);
+            Debug.Log("CSAnalyzer: key_points parsed: currentGain=" + currentGain + " optimalGain=" + optimalGain);
+        }
+        else
+        {
+            Debug.LogWarning("CSAnalyzer: key_points section not found, using defaults");
+            currentGain = 0.1483f;
+            currentSteps = 6;
+            optimalGain = 0.0148f;
+            optimalSteps = 2;
+        }
+
+        // Parse trajectories — into parallel array, no Dictionary
+        trajData = new float[trajKeys.Length][];
+        trajMaxLen = 0;
+
+        int trajIdx = json.IndexOf("\"trajectories\"");
+        if (trajIdx >= 0)
+        {
+            int trajBrace = json.IndexOf('{', trajIdx);
+            int trajEnd = FindMatchingBrace(json, trajBrace);
+            string trajSection = json.Substring(trajBrace, trajEnd - trajBrace + 1);
+
+            for (int i = 0; i < trajKeys.Length; i++)
+            {
+                string search = "\"" + trajKeys[i] + "\"";
+                int keyPos = trajSection.IndexOf(search);
+                if (keyPos < 0)
+                {
+                    Debug.LogWarning("CSAnalyzer: trajectory key not found: " + trajKeys[i]);
+                    continue;
+                }
+                int arrStart = trajSection.IndexOf('[', keyPos);
+                if (arrStart < 0) continue;
+                int arrEnd = trajSection.IndexOf(']', arrStart);
+                if (arrEnd < 0) continue;
+                string arrStr = trajSection.Substring(arrStart + 1, arrEnd - arrStart - 1);
+                string[] parts = arrStr.Split(',');
+                float[] values = new float[parts.Length];
+                for (int p = 0; p < parts.Length; p++)
+                {
+                    float.TryParse(parts[p].Trim(),
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out values[p]);
+                }
+                trajData[i] = values;
+                if (values.Length > trajMaxLen) trajMaxLen = values.Length;
+                Debug.Log("CSAnalyzer: trajectory[" + trajKeys[i] + "] len=" + values.Length);
+            }
+        }
+        else
+        {
+            Debug.LogWarning("CSAnalyzer: trajectories section not found");
         }
     }
 
-    float ParseNestedScalar(string json, string section, string key, float defaultVal)
+    int FindMatchingBrace(string s, int openIdx)
     {
-        string search = "\"" + section + "\"";
-        int secIdx = json.IndexOf(search);
-        if (secIdx < 0) return defaultVal;
-        int braceStart = json.IndexOf('{', secIdx);
+        int depth = 0;
+        for (int i = openIdx; i < s.Length; i++)
+        {
+            if (s[i] == '{') depth++;
+            else if (s[i] == '}') { depth--; if (depth == 0) return i; }
+        }
+        return s.Length - 1;
+    }
+
+    float ParseNestedValue(string section, string objKey, string valKey, float defaultVal)
+    {
+        string search = "\"" + objKey + "\"";
+        int idx = section.IndexOf(search);
+        if (idx < 0) return defaultVal;
+        int braceStart = section.IndexOf('{', idx);
         if (braceStart < 0) return defaultVal;
-        // Find closing brace
-        int braceEnd = json.IndexOf('}', braceStart);
+        int braceEnd = section.IndexOf('}', braceStart);
         if (braceEnd < 0) return defaultVal;
-        string sub = json.Substring(braceStart, braceEnd - braceStart + 1);
-        string keySearch = "\"" + key + "\"";
+        string sub = section.Substring(braceStart, braceEnd - braceStart + 1);
+        string keySearch = "\"" + valKey + "\"";
         int keyIdx = sub.IndexOf(keySearch);
         if (keyIdx < 0) return defaultVal;
         return ParseValueAfterKey(sub, keyIdx);
     }
 
-    float[] ParseTrajectory(string json, string csKey)
-    {
-        string search = "\"" + csKey + "\"";
-        // Find within trajectories section
-        int trajIdx = json.IndexOf("\"trajectories\"");
-        if (trajIdx < 0) return null;
-        int keyIdx = json.IndexOf(search, trajIdx);
-        if (keyIdx < 0) return null;
-        int arrStart = json.IndexOf('[', keyIdx);
-        if (arrStart < 0) return null;
-        int arrEnd = json.IndexOf(']', arrStart);
-        if (arrEnd < 0) return null;
-        string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
-        string[] parts = arrStr.Split(',');
-        float[] result = new float[parts.Length];
-        for (int i = 0; i < parts.Length; i++)
-        {
-            float.TryParse(parts[i].Trim(),
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out result[i]);
-        }
-        return result;
-    }
-
     float ParseValueAfterKey(string s, int keyIdx)
     {
         int colon = s.IndexOf(':', keyIdx);
+        if (colon < 0) return 0f;
         int start = colon + 1;
-        while (start < s.Length && (s[start] == ' ' || s[start] == '\t')) start++;
+        while (start < s.Length && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n')) start++;
         int end = start;
-        while (end < s.Length && s[end] != ',' && s[end] != '}' && s[end] != ']' && s[end] != '\n') end++;
+        while (end < s.Length && s[end] != ',' && s[end] != '}' && s[end] != ']' && s[end] != '\n' && s[end] != '\r') end++;
         string val = s.Substring(start, end - start).Trim();
-        // Remove boolean/string values
         if (val == "true" || val == "false") return val == "true" ? 1f : 0f;
+        // Strip surrounding quotes for string values
+        if (val.StartsWith("\"")) return 0f;
         float result;
         float.TryParse(val, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out result);
@@ -225,8 +302,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
 
     float ParseScalar(string json, string key, float defaultVal)
     {
+        // Search backwards from end to avoid matching nested keys
         string search = "\"" + key + "\"";
-        int idx = json.IndexOf(search);
+        int idx = json.LastIndexOf(search);
         if (idx < 0) return defaultVal;
         return ParseValueAfterKey(json, idx);
     }
@@ -235,9 +313,23 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     {
         string search = "\"" + key + "\"";
         int keyIdx = json.IndexOf(search);
-        if (keyIdx < 0) return null;
+        if (keyIdx < 0)
+        {
+            Debug.LogWarning("CSAnalyzer: key not found: " + key);
+            return null;
+        }
         int arrStart = json.IndexOf('[', keyIdx);
+        if (arrStart < 0)
+        {
+            Debug.LogWarning("CSAnalyzer: '[' not found after key: " + key);
+            return null;
+        }
         int arrEnd = json.IndexOf(']', arrStart);
+        if (arrEnd < 0)
+        {
+            Debug.LogWarning("CSAnalyzer: ']' not found after key: " + key);
+            return null;
+        }
         string arrStr = json.Substring(arrStart + 1, arrEnd - arrStart - 1);
         string[] parts = arrStr.Split(',');
         float[] result = new float[parts.Length];
@@ -251,8 +343,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         return result;
     }
 
-    // --- Coordinate helpers ---
-    // Graph 1 (gain) is at top, Graph 2 (steps) in middle, Graph 3 (trajectories) at bottom
+    // ============================================================
+    // Coordinate helpers
+    // ============================================================
     float GraphBaseY(int graphIndex)
     {
         // graphIndex 0=top (gain), 1=middle (steps), 2=bottom (trajectories)
@@ -262,25 +355,22 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     Vector3 GainToLocal(int i)
     {
         float nx = (csValues[i] - 0.10f) / (1.00f - 0.10f);
-        float maxGain = loopGains[0]; // first value is max
-        float ny = loopGains[i] / maxGain;
+        float maxGain = loopGains[0];
+        float ny = maxGain > 0f ? loopGains[i] / maxGain : 0f;
         return new Vector3(nx * graphW - graphW * 0.5f, GraphBaseY(0) + ny * graphH, 0f);
     }
 
     Vector3 StepsToLocal(int i)
     {
         float nx = (csValues[i] - 0.10f) / (1.00f - 0.10f);
-        float maxSteps = convergenceSteps[0]; // first value is max
-        float ny = convergenceSteps[i] / maxSteps;
+        float maxSteps = convergenceSteps[0];
+        float ny = maxSteps > 0f ? convergenceSteps[i] / maxSteps : 0f;
         return new Vector3(nx * graphW - graphW * 0.5f, GraphBaseY(1) + ny * graphH, 0f);
     }
 
-    Vector3 TrajToLocal(int graphIdx, float[] traj, int step)
+    Vector3 TrajToLocal(float[] traj, int step)
     {
-        int maxLen = 0;
-        foreach (var kv in trajectories)
-            if (kv.Value.Length > maxLen) maxLen = kv.Value.Length;
-        float nx = maxLen > 1 ? (float)step / (maxLen - 1) : 0f;
+        float nx = trajMaxLen > 1 ? (float)step / (trajMaxLen - 1) : 0f;
         float ny = Mathf.Clamp01(traj[step]);
         return new Vector3(nx * graphW - graphW * 0.5f, GraphBaseY(2) + ny * graphH, 0f);
     }
@@ -291,13 +381,14 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         return nx * graphW - graphW * 0.5f;
     }
 
-    // --- Build Graph 1: |G| vs cs ---
+    // ============================================================
+    // Build Graph 1: |G| vs cs
+    // ============================================================
     void BuildGainGraph()
     {
         var mat = new Material(Shader.Find("Sprites/Default"));
         int count = csValues.Length;
 
-        // LineRenderer for gain curve
         var go = new GameObject("GainCurve");
         go.transform.SetParent(transform, false);
         gainCurveLR = go.AddComponent<LineRenderer>();
@@ -343,7 +434,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         labelGo.transform.localPosition = new Vector3(-graphW * 0.5f, GraphBaseY(0) + graphH + 0.01f, 0f);
     }
 
-    // --- Build Graph 2: Steps vs cs ---
+    // ============================================================
+    // Build Graph 2: Steps vs cs
+    // ============================================================
     void BuildStepsGraph()
     {
         var mat = new Material(Shader.Find("Sprites/Default"));
@@ -363,13 +456,11 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         for (int i = 0; i < count; i++)
             stepsCurveLR.SetPosition(i, StepsToLocal(i));
 
-        // Red marker at cs=1.00 (last point, steps=1, rapid drop)
-        // Actually the first point cs=0.10 has steps=36 (highest)
-        // Mark the steep region at cs=0.10 with red
+        // Red marker at cs=0.10 (highest step count)
         var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         markerGo.name = "StepsHighMarker";
         markerGo.transform.SetParent(transform, false);
-        markerGo.transform.localPosition = StepsToLocal(0); // cs=0.10, steps=36
+        markerGo.transform.localPosition = StepsToLocal(0);
         markerGo.transform.localScale = Vector3.one * 0.012f;
         var mr = markerGo.GetComponent<MeshRenderer>();
         mr.material = new Material(Shader.Find("Sprites/Default"));
@@ -389,21 +480,18 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         labelGo.transform.localPosition = new Vector3(-graphW * 0.5f, GraphBaseY(1) + graphH + 0.01f, 0f);
     }
 
-    // --- Build Graph 3: fw trajectories ---
+    // ============================================================
+    // Build Graph 3: fw trajectories
+    // ============================================================
     void BuildTrajectoryGraph()
     {
         var mat = new Material(Shader.Find("Sprites/Default"));
 
-        // Find max trajectory length
-        int maxLen = 0;
-        foreach (var kv in trajectories)
-            if (kv.Value.Length > maxLen) maxLen = kv.Value.Length;
-
-        // Build each trajectory
+        // Build each trajectory from parallel array
         for (int t = 0; t < trajKeys.Length; t++)
         {
-            if (!trajectories.ContainsKey(trajKeys[t])) continue;
-            float[] traj = trajectories[trajKeys[t]];
+            if (trajData[t] == null) continue;
+            float[] traj = trajData[t];
 
             var go = new GameObject("Traj_" + trajKeys[t]);
             go.transform.SetParent(transform, false);
@@ -417,7 +505,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             lr.endColor = trajColors[t];
 
             for (int i = 0; i < traj.Length; i++)
-                lr.SetPosition(i, TrajToLocal(2, traj, i));
+                lr.SetPosition(i, TrajToLocal(traj, i));
         }
 
         // Threshold line at fw=0.3
@@ -447,7 +535,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         labelGo.transform.localPosition = new Vector3(-graphW * 0.5f, GraphBaseY(2) + graphH + 0.01f, 0f);
     }
 
-    // --- Build markers ---
+    // ============================================================
+    // Build markers
+    // ============================================================
     void BuildMarkers()
     {
         var mat = new Material(Shader.Find("Sprites/Default"));
@@ -456,7 +546,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         currentMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         currentMarker.name = "CurrentMarker";
         currentMarker.transform.SetParent(transform, false);
-        currentMarker.transform.localScale = Vector3.one * 0.016f; // radius 0.008m
+        currentMarker.transform.localScale = Vector3.one * 0.016f;
         var cmr = currentMarker.GetComponent<MeshRenderer>();
         cmr.material = new Material(mat);
         cmr.material.color = Color.white;
@@ -490,9 +580,12 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
 
     void UpdateMarkerPositions()
     {
+        if (currentMarker == null || loopGains == null) return;
+        float maxGain = loopGains[0];
+        if (maxGain <= 0f) return;
+
         // Current marker on gain graph
         float gainAtCs = InterpolateGain(interactiveCs);
-        float maxGain = loopGains[0];
         float ny = gainAtCs / maxGain;
         float x = CsToLocalX(interactiveCs);
         currentMarker.transform.localPosition = new Vector3(x, GraphBaseY(0) + ny * graphH, -0.005f);
@@ -510,7 +603,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         criticalMarker.transform.localPosition = new Vector3(cx, GraphBaseY(0) + cny * graphH, -0.005f);
     }
 
-    // --- Build stats display ---
+    // ============================================================
+    // Build stats display
+    // ============================================================
     void BuildStatsDisplay()
     {
         var go = new GameObject("StatsDisplay");
@@ -524,7 +619,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         go.transform.localPosition = new Vector3(graphW * 0.5f + 0.03f, GraphBaseY(1) + graphH * 0.5f, 0f);
     }
 
-    // --- Interpolation ---
+    // ============================================================
+    // Interpolation
+    // ============================================================
     float InterpolateGain(float cs)
     {
         if (csValues == null || csValues.Length < 2) return 0f;
@@ -557,7 +654,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         return convergenceSteps[convergenceSteps.Length - 1];
     }
 
-    // --- Update ---
+    // ============================================================
+    // Update
+    // ============================================================
     void Update()
     {
         if (!placedOnStart)
@@ -647,22 +746,12 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         float steps = InterpolateSteps(Mathf.Min(interactiveCs, 1.0f));
 
         string status;
-        Color statusColor;
         if (interactiveCs >= 1.00f)
-        {
             status = "<color=red>OVERSHOOT!</color>";
-            statusColor = Color.red;
-        }
         else if (Mathf.Abs(interactiveCs - 0.95f) < 0.03f)
-        {
             status = "<color=#FFcc00>Optimal \u2605</color>";
-            statusColor = new Color(1f, 0.8f, 0f);
-        }
         else
-        {
             status = "Current";
-            statusColor = Color.white;
-        }
 
         statsDisplay.text = $"cs: {interactiveCs:F2}\n|G|: {gain:F4}\nSteps: {steps:F0}\nStatus: {status}";
     }
@@ -683,7 +772,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         }
     }
 
-    // --- Public API ---
+    // ============================================================
+    // Public API (called by ShapeManager / DebugDisplay)
+    // ============================================================
     public string GetParamLabel()
     {
         if (!dataLoaded) return "Loading...";
