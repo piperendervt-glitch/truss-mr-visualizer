@@ -533,11 +533,11 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         Debug.Log("CSAnalyzer: StepsCurve LR material=" + stepsCurveLR.material
             + " point0=" + stepsCurveLR.GetPosition(0));
 
-        // Red marker at cs=0.10 (highest step count)
+        // Red marker at cs=1.00 (critical point)
         var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        markerGo.name = "StepsHighMarker";
+        markerGo.name = "StepsCriticalMarker";
         markerGo.transform.SetParent(transform, false);
-        markerGo.transform.localPosition = StepsToLocal(0);
+        markerGo.transform.localPosition = StepsToLocal(count - 1);
         markerGo.transform.localScale = Vector3.one * 0.012f;
         var mr = markerGo.GetComponent<MeshRenderer>();
         mr.material = new Material(Shader.Find("Sprites/Default"));
