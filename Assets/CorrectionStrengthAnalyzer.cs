@@ -78,22 +78,53 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
 
     // Placement & visibility
     bool placedOnStart;
+    bool hasStarted;
     public bool isVisible = true;
     public string debugMessage = "";
+    int updateCount; // debug frame counter
 
     void Start()
     {
+        Debug.Log("CSAnalyzer: Start() called, instanceID=" + GetInstanceID()
+            + " pos=" + transform.position + " active=" + gameObject.activeSelf);
+
+        hasStarted = true;
+
+        // OnEnable may have already started loading — don't double-start
+        if (loadCoroutine != null)
+        {
+            Debug.Log("CSAnalyzer: Start() — coroutine already running from OnEnable, skipping");
+            return;
+        }
+
         foreach (Transform child in transform)
             Destroy(child.gameObject);
 
         loadCoroutine = StartCoroutine(LoadDataAsync());
+
+        // === DEBUG CUBE: if this is visible, transform itself is OK ===
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = "DEBUG_TestCube";
+        cube.transform.SetParent(transform, false);
+        cube.transform.localPosition = Vector3.up * 0.5f;
+        cube.transform.localScale = Vector3.one * 0.05f;
+        var cubeMR = cube.GetComponent<MeshRenderer>();
+        cubeMR.material = new Material(Shader.Find("Sprites/Default"));
+        cubeMR.material.color = Color.magenta;
+        var cubeCol = cube.GetComponent<Collider>();
+        if (cubeCol != null) Destroy(cubeCol);
+        Debug.Log("CSAnalyzer: DEBUG cube created at localPos=(0, 0.5, 0)");
     }
 
     void OnEnable()
     {
-        // Restart loading if coroutine was killed by deactivation
-        if (!dataLoaded && loadCoroutine == null)
+        Debug.Log("CSAnalyzer: OnEnable() called, hasStarted=" + hasStarted
+            + " dataLoaded=" + dataLoaded + " loadCoroutine=" + (loadCoroutine != null));
+
+        // Only restart on RE-enable (after Start has run once)
+        if (hasStarted && !dataLoaded && loadCoroutine == null)
         {
+            Debug.Log("CSAnalyzer: OnEnable() — restarting coroutine after deactivation");
             foreach (Transform child in transform)
                 Destroy(child.gameObject);
             loadCoroutine = StartCoroutine(LoadDataAsync());
@@ -454,6 +485,23 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         gradient.SetKeys(colorKeys, alphaKeys);
         gainCurveLR.colorGradient = gradient;
 
+        // Set initial positions (BUG FIX: without this, all positions stay at origin)
+        for (int i = 0; i < count; i++)
+            gainCurveLR.SetPosition(i, gainCurveLocal[i]);
+
+        // === DEBUG: verify LineRenderer state ===
+        Debug.Log("CSAnalyzer: GainCurve LR material=" + gainCurveLR.material
+            + " sharedMat=" + gainCurveLR.sharedMaterial
+            + " posCount=" + gainCurveLR.positionCount
+            + " useWorldSpace=" + gainCurveLR.useWorldSpace);
+        Debug.Log("CSAnalyzer: GainCurve point0=" + gainCurveLR.GetPosition(0)
+            + " pointLast=" + gainCurveLR.GetPosition(count - 1));
+        Debug.Log("CSAnalyzer: GainCurve local[0]=" + gainCurveLocal[0]
+            + " local[last]=" + gainCurveLocal[count - 1]);
+        var shaderCheck = Shader.Find("Sprites/Default");
+        Debug.Log("CSAnalyzer: Shader.Find('Sprites/Default') = "
+            + (shaderCheck != null ? shaderCheck.name : "NULL!"));
+
         // Label
         var labelGo = new GameObject("GainLabel");
         labelGo.transform.SetParent(transform, false);
@@ -489,6 +537,13 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         stepsCurveLR.material = mat;
         stepsCurveLR.startColor = new Color(0.3f, 0.8f, 1f);
         stepsCurveLR.endColor = new Color(0.3f, 0.8f, 1f);
+
+        // Set initial positions
+        for (int i = 0; i < count; i++)
+            stepsCurveLR.SetPosition(i, stepsCurveLocal[i]);
+
+        Debug.Log("CSAnalyzer: StepsCurve LR material=" + stepsCurveLR.material
+            + " point0=" + stepsCurveLR.GetPosition(0));
 
         // Red marker at cs=0.10 (highest step count)
         var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -546,6 +601,10 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             lr.startColor = trajColors[t];
             lr.endColor = trajColors[t];
             trajLRs[t] = lr;
+
+            // Set initial positions
+            for (int i = 0; i < traj.Length; i++)
+                lr.SetPosition(i, trajLocalPos[t][i]);
         }
 
         // Threshold line at fw=0.3
@@ -563,6 +622,11 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         thresholdLineLR.material = mat;
         thresholdLineLR.startColor = Color.white;
         thresholdLineLR.endColor = Color.white;
+        thresholdLineLR.SetPosition(0, thresholdLocal0);
+        thresholdLineLR.SetPosition(1, thresholdLocal1);
+
+        Debug.Log("CSAnalyzer: TrajGraph built, trajLRs created="
+            + CountLoadedTrajectories() + " thresholdLine set");
 
         // Label
         var labelGo = new GameObject("TrajLabel");
@@ -737,6 +801,21 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // ============================================================
     void Update()
     {
+        updateCount++;
+
+        // === DEBUG: log first 5 frames to track lifecycle ===
+        if (updateCount <= 5)
+        {
+            var camDbg = Camera.main;
+            Debug.Log("CSAnalyzer: Update() frame=" + updateCount
+                + " placedOnStart=" + placedOnStart
+                + " dataLoaded=" + dataLoaded
+                + " Camera.main=" + (camDbg != null ? camDbg.name : "NULL")
+                + " pos=" + transform.position
+                + " rot=" + transform.rotation.eulerAngles
+                + " childCount=" + transform.childCount);
+        }
+
         // Place in front of HMD on first frame
         if (!placedOnStart)
         {
@@ -747,14 +826,37 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
                 // Face the camera so the 2D graph is visible
                 transform.rotation = Quaternion.LookRotation(cam.transform.forward);
                 placedOnStart = true;
-                Debug.Log("CSAnalyzer: Initial placement at 0.8m in front of HMD");
+                Debug.Log("CSAnalyzer: Placed at " + transform.position
+                    + " cam=" + cam.transform.position
+                    + " camFwd=" + cam.transform.forward);
+            }
+            else
+            {
+                // Camera.main is null — this is likely the "stuck at origin" bug
+                if (updateCount <= 3)
+                    Debug.LogWarning("CSAnalyzer: Camera.main is NULL on frame " + updateCount
+                        + " — cannot place! transform stuck at " + transform.position);
             }
         }
 
         // Left grip: reposition in front of HMD (works even before dataLoaded)
         HandleGrip();
 
-        if (!dataLoaded) return;
+        if (!dataLoaded)
+        {
+            if (updateCount <= 5)
+                Debug.Log("CSAnalyzer: Update() frame=" + updateCount + " — waiting for dataLoaded");
+            return;
+        }
+
+        // === DEBUG: log once when first entering the data-loaded path ===
+        if (updateCount <= 10 && gainCurveLR != null)
+        {
+            Debug.Log("CSAnalyzer: UpdateLinePositions first run, pos=" + transform.position
+                + " gainLR.posCount=" + gainCurveLR.positionCount
+                + " gainLR.enabled=" + gainCurveLR.enabled
+                + " gainLR.material=" + (gainCurveLR.material != null ? gainCurveLR.material.name : "NULL"));
+        }
 
         // Guard: skip input when grabbed or menu open (FanoQ3 pattern)
         var grabber = GetComponent<ShapeGrabber>();
