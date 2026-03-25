@@ -30,7 +30,8 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         new Color(0.6f, 0.2f, 1f), // purple
         Color.white
     };
-    static readonly float[] trajWidths = { 0.002f, 0.002f, 0.002f, 0.004f, 0.002f, 0.002f };
+    //                                      0.50    0.70    0.85    0.95    1.00    1.05
+    static readonly float[] trajWidths = { 0.002f, 0.002f, 0.002f, 0.005f, 0.002f, 0.002f };
 
     // Key points
     float currentCs = 0.50f;
@@ -101,19 +102,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             Destroy(child.gameObject);
 
         loadCoroutine = StartCoroutine(LoadDataAsync());
-
-        // === DEBUG CUBE: if this is visible, transform itself is OK ===
-        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        cube.name = "DEBUG_TestCube";
-        cube.transform.SetParent(transform, false);
-        cube.transform.localPosition = Vector3.up * 0.5f;
-        cube.transform.localScale = Vector3.one * 0.05f;
-        var cubeMR = cube.GetComponent<MeshRenderer>();
-        cubeMR.material = new Material(Shader.Find("Sprites/Default"));
-        cubeMR.material.color = Color.magenta;
-        var cubeCol = cube.GetComponent<Collider>();
-        if (cubeCol != null) Destroy(cubeCol);
-        Debug.Log("CSAnalyzer: DEBUG cube created at localPos=(0, 0.5, 0)");
     }
 
     void OnEnable()
@@ -716,7 +704,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         var go = new GameObject("StatsDisplay");
         go.transform.SetParent(transform, false);
         statsDisplay = go.AddComponent<TextMeshPro>();
-        statsDisplay.fontSize = 0.06f;
+        statsDisplay.fontSize = 0.10f;
         statsDisplay.alignment = TextAlignmentOptions.Left;
         statsDisplay.color = Color.white;
         statsDisplay.richText = true;
