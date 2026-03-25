@@ -15,6 +15,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     float[] convergenceSteps;
     float threshold = 0.3f;
     bool dataLoaded;
+    Coroutine loadCoroutine;
 
     // Trajectories — parallel arrays (no Dictionary)
     static readonly string[] trajKeys = { "0.50", "0.70", "0.85", "0.95", "1.00", "1.05" };
@@ -48,15 +49,24 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // Interactive cs position
     float interactiveCs = 0.50f;
 
-    // Visualization objects
+    // Visualization objects — LineRenderers (useWorldSpace = true)
     LineRenderer gainCurveLR;
+    Vector3[] gainCurveLocal;
+
     LineRenderer stepsCurveLR;
+    Vector3[] stepsCurveLocal;
+
     LineRenderer thresholdLineLR;
+    Vector3 thresholdLocal0, thresholdLocal1;
+
+    // Trajectory LineRenderers
+    LineRenderer[] trajLRs;
+    Vector3[][] trajLocalPos;
 
     // Markers
-    GameObject currentMarker;   // white
-    GameObject optimalMarker;   // gold
-    GameObject criticalMarker;  // red
+    GameObject currentMarker;
+    GameObject optimalMarker;
+    GameObject criticalMarker;
 
     // Graph labels
     TextMeshPro gainLabel;
@@ -66,8 +76,9 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // Stats display
     TextMeshPro statsDisplay;
 
-    // Placement
+    // Placement & visibility
     bool placedOnStart;
+    public bool isVisible = true;
     public string debugMessage = "";
 
     void Start()
@@ -75,7 +86,25 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         foreach (Transform child in transform)
             Destroy(child.gameObject);
 
-        StartCoroutine(LoadDataAsync());
+        loadCoroutine = StartCoroutine(LoadDataAsync());
+    }
+
+    void OnEnable()
+    {
+        // Restart loading if coroutine was killed by deactivation
+        if (!dataLoaded && loadCoroutine == null)
+        {
+            foreach (Transform child in transform)
+                Destroy(child.gameObject);
+            loadCoroutine = StartCoroutine(LoadDataAsync());
+        }
+    }
+
+    void OnDisable()
+    {
+        // Mark coroutine as dead so OnEnable knows to restart
+        if (!dataLoaded)
+            loadCoroutine = null;
     }
 
     IEnumerator LoadDataAsync()
@@ -99,6 +128,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             else
             {
                 Debug.LogError("CSAnalyzer: UnityWebRequest FAILED: " + req.error + " url=" + req.url);
+                loadCoroutine = null;
                 yield break;
             }
         }
@@ -112,6 +142,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         catch (System.Exception e)
         {
             Debug.LogError("CSAnalyzer: File.ReadAllText FAILED: " + e.Message);
+            loadCoroutine = null;
             yield break;
         }
 #endif
@@ -125,16 +156,19 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         if (csValues == null)
         {
             Debug.LogError("CSAnalyzer: Parse failed — csValues is null");
+            loadCoroutine = null;
             yield break;
         }
         if (loopGains == null)
         {
             Debug.LogError("CSAnalyzer: Parse failed — loopGains is null");
+            loadCoroutine = null;
             yield break;
         }
         if (convergenceSteps == null)
         {
             Debug.LogError("CSAnalyzer: Parse failed — convergenceSteps is null");
+            loadCoroutine = null;
             yield break;
         }
 
@@ -156,6 +190,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         Debug.Log("CSAnalyzer: StatsDisplay built");
 
         dataLoaded = true;
+        loadCoroutine = null;
         Debug.Log("CSAnalyzer: dataLoaded=true, JSON loaded, cs_count=" + csValues.Length);
     }
 
@@ -189,9 +224,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         int kpIdx = json.IndexOf("\"key_points\"");
         if (kpIdx >= 0)
         {
-            // Find the opening brace of key_points object
             int kpBrace = json.IndexOf('{', kpIdx);
-            // Find matching closing brace (nested objects)
             int kpEnd = FindMatchingBrace(json, kpBrace);
             string kpSection = json.Substring(kpBrace, kpEnd - kpBrace + 1);
 
@@ -292,7 +325,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         while (end < s.Length && s[end] != ',' && s[end] != '}' && s[end] != ']' && s[end] != '\n' && s[end] != '\r') end++;
         string val = s.Substring(start, end - start).Trim();
         if (val == "true" || val == "false") return val == "true" ? 1f : 0f;
-        // Strip surrounding quotes for string values
         if (val.StartsWith("\"")) return 0f;
         float result;
         float.TryParse(val, System.Globalization.NumberStyles.Float,
@@ -302,7 +334,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
 
     float ParseScalar(string json, string key, float defaultVal)
     {
-        // Search backwards from end to avoid matching nested keys
         string search = "\"" + key + "\"";
         int idx = json.LastIndexOf(search);
         if (idx < 0) return defaultVal;
@@ -348,7 +379,6 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     // ============================================================
     float GraphBaseY(int graphIndex)
     {
-        // graphIndex 0=top (gain), 1=middle (steps), 2=bottom (trajectories)
         return (2 - graphIndex) * graphSpacingY;
     }
 
@@ -389,13 +419,18 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         var mat = new Material(Shader.Find("Sprites/Default"));
         int count = csValues.Length;
 
+        // Cache local positions
+        gainCurveLocal = new Vector3[count];
+        for (int i = 0; i < count; i++)
+            gainCurveLocal[i] = GainToLocal(i);
+
         var go = new GameObject("GainCurve");
         go.transform.SetParent(transform, false);
         gainCurveLR = go.AddComponent<LineRenderer>();
         gainCurveLR.positionCount = count;
         gainCurveLR.startWidth = 0.003f;
         gainCurveLR.endWidth = 0.003f;
-        gainCurveLR.useWorldSpace = false;
+        gainCurveLR.useWorldSpace = true;
         gainCurveLR.material = mat;
 
         // Color gradient based on |G| value
@@ -419,15 +454,12 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         gradient.SetKeys(colorKeys, alphaKeys);
         gainCurveLR.colorGradient = gradient;
 
-        for (int i = 0; i < count; i++)
-            gainCurveLR.SetPosition(i, GainToLocal(i));
-
         // Label
         var labelGo = new GameObject("GainLabel");
         labelGo.transform.SetParent(transform, false);
         gainLabel = labelGo.AddComponent<TextMeshPro>();
         gainLabel.text = "|G| vs cs";
-        gainLabel.fontSize = 0.03f;
+        gainLabel.fontSize = 0.08f;
         gainLabel.alignment = TextAlignmentOptions.Left;
         gainLabel.color = Color.white;
         gainLabel.rectTransform.sizeDelta = new Vector2(0.2f, 0.04f);
@@ -442,19 +474,21 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         var mat = new Material(Shader.Find("Sprites/Default"));
         int count = csValues.Length;
 
+        // Cache local positions
+        stepsCurveLocal = new Vector3[count];
+        for (int i = 0; i < count; i++)
+            stepsCurveLocal[i] = StepsToLocal(i);
+
         var go = new GameObject("StepsCurve");
         go.transform.SetParent(transform, false);
         stepsCurveLR = go.AddComponent<LineRenderer>();
         stepsCurveLR.positionCount = count;
         stepsCurveLR.startWidth = 0.003f;
         stepsCurveLR.endWidth = 0.003f;
-        stepsCurveLR.useWorldSpace = false;
+        stepsCurveLR.useWorldSpace = true;
         stepsCurveLR.material = mat;
         stepsCurveLR.startColor = new Color(0.3f, 0.8f, 1f);
         stepsCurveLR.endColor = new Color(0.3f, 0.8f, 1f);
-
-        for (int i = 0; i < count; i++)
-            stepsCurveLR.SetPosition(i, StepsToLocal(i));
 
         // Red marker at cs=0.10 (highest step count)
         var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -473,7 +507,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         labelGo.transform.SetParent(transform, false);
         stepsLabel = labelGo.AddComponent<TextMeshPro>();
         stepsLabel.text = "Steps vs cs";
-        stepsLabel.fontSize = 0.03f;
+        stepsLabel.fontSize = 0.08f;
         stepsLabel.alignment = TextAlignmentOptions.Left;
         stepsLabel.color = Color.white;
         stepsLabel.rectTransform.sizeDelta = new Vector2(0.2f, 0.04f);
@@ -487,11 +521,19 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     {
         var mat = new Material(Shader.Find("Sprites/Default"));
 
+        trajLRs = new LineRenderer[trajKeys.Length];
+        trajLocalPos = new Vector3[trajKeys.Length][];
+
         // Build each trajectory from parallel array
         for (int t = 0; t < trajKeys.Length; t++)
         {
             if (trajData[t] == null) continue;
             float[] traj = trajData[t];
+
+            // Cache local positions
+            trajLocalPos[t] = new Vector3[traj.Length];
+            for (int i = 0; i < traj.Length; i++)
+                trajLocalPos[t][i] = TrajToLocal(traj, i);
 
             var go = new GameObject("Traj_" + trajKeys[t]);
             go.transform.SetParent(transform, false);
@@ -499,36 +541,35 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
             lr.positionCount = traj.Length;
             lr.startWidth = trajWidths[t];
             lr.endWidth = trajWidths[t];
-            lr.useWorldSpace = false;
+            lr.useWorldSpace = true;
             lr.material = mat;
             lr.startColor = trajColors[t];
             lr.endColor = trajColors[t];
-
-            for (int i = 0; i < traj.Length; i++)
-                lr.SetPosition(i, TrajToLocal(traj, i));
+            trajLRs[t] = lr;
         }
 
         // Threshold line at fw=0.3
         float threshY = GraphBaseY(2) + threshold * graphH;
+        thresholdLocal0 = new Vector3(-graphW * 0.5f, threshY, 0f);
+        thresholdLocal1 = new Vector3(graphW * 0.5f, threshY, 0f);
+
         var threshGo = new GameObject("TrajThreshold");
         threshGo.transform.SetParent(transform, false);
         thresholdLineLR = threshGo.AddComponent<LineRenderer>();
         thresholdLineLR.positionCount = 2;
         thresholdLineLR.startWidth = 0.001f;
         thresholdLineLR.endWidth = 0.001f;
-        thresholdLineLR.useWorldSpace = false;
+        thresholdLineLR.useWorldSpace = true;
         thresholdLineLR.material = mat;
         thresholdLineLR.startColor = Color.white;
         thresholdLineLR.endColor = Color.white;
-        thresholdLineLR.SetPosition(0, new Vector3(-graphW * 0.5f, threshY, 0f));
-        thresholdLineLR.SetPosition(1, new Vector3(graphW * 0.5f, threshY, 0f));
 
         // Label
         var labelGo = new GameObject("TrajLabel");
         labelGo.transform.SetParent(transform, false);
         trajLabel = labelGo.AddComponent<TextMeshPro>();
         trajLabel.text = "fw trajectories";
-        trajLabel.fontSize = 0.03f;
+        trajLabel.fontSize = 0.08f;
         trajLabel.alignment = TextAlignmentOptions.Left;
         trajLabel.color = Color.white;
         trajLabel.rectTransform.sizeDelta = new Vector2(0.2f, 0.04f);
@@ -611,7 +652,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         var go = new GameObject("StatsDisplay");
         go.transform.SetParent(transform, false);
         statsDisplay = go.AddComponent<TextMeshPro>();
-        statsDisplay.fontSize = 0.025f;
+        statsDisplay.fontSize = 0.06f;
         statsDisplay.alignment = TextAlignmentOptions.Left;
         statsDisplay.color = Color.white;
         statsDisplay.richText = true;
@@ -655,17 +696,56 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
     }
 
     // ============================================================
+    // World-space line position update (FanoQ3Animator pattern)
+    // ============================================================
+    void UpdateLinePositions()
+    {
+        Vector3 pos = transform.position;
+        Quaternion rot = transform.rotation;
+
+        // Gain curve
+        if (gainCurveLR != null && gainCurveLocal != null)
+            for (int i = 0; i < gainCurveLocal.Length; i++)
+                gainCurveLR.SetPosition(i, pos + rot * gainCurveLocal[i]);
+
+        // Steps curve
+        if (stepsCurveLR != null && stepsCurveLocal != null)
+            for (int i = 0; i < stepsCurveLocal.Length; i++)
+                stepsCurveLR.SetPosition(i, pos + rot * stepsCurveLocal[i]);
+
+        // Threshold line
+        if (thresholdLineLR != null)
+        {
+            thresholdLineLR.SetPosition(0, pos + rot * thresholdLocal0);
+            thresholdLineLR.SetPosition(1, pos + rot * thresholdLocal1);
+        }
+
+        // Trajectories
+        if (trajLRs != null)
+        {
+            for (int t = 0; t < trajLRs.Length; t++)
+            {
+                if (trajLRs[t] == null || trajLocalPos[t] == null) continue;
+                for (int i = 0; i < trajLocalPos[t].Length; i++)
+                    trajLRs[t].SetPosition(i, pos + rot * trajLocalPos[t][i]);
+            }
+        }
+    }
+
+    // ============================================================
     // Update
     // ============================================================
     void Update()
     {
-        // Place in front of HMD on first frame (before dataLoaded)
+        // Place in front of HMD on first frame
         if (!placedOnStart)
         {
             var cam = Camera.main;
             if (cam != null)
             {
                 transform.position = cam.transform.position + cam.transform.forward * 0.8f;
+                // Face the camera so the 2D graph is visible
+                transform.rotation = Quaternion.LookRotation(cam.transform.forward);
                 placedOnStart = true;
                 Debug.Log("CSAnalyzer: Initial placement at 0.8m in front of HMD");
             }
@@ -676,8 +756,16 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
 
         if (!dataLoaded) return;
 
-        HandleStickInput();
+        // Guard: skip input when grabbed or menu open (FanoQ3 pattern)
+        var grabber = GetComponent<ShapeGrabber>();
+        bool grabbed = grabber != null && grabber.isGrabbed;
+        if (!grabbed && !MenuUI.isMenuOpen)
+        {
+            HandleStickInput();
+        }
+
         UpdateMarkerPositions();
+        UpdateLinePositions();
         UpdateStats();
         BillboardLabels();
     }
@@ -694,7 +782,7 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         if (leftCtrl != null)
         {
             var grip = leftCtrl.TryGetChildControl<AxisControl>("grip");
-            if (grip != null && grip.ReadValue() > 0.8f)
+            if (grip != null && grip.ReadValue() > 0.5f)
                 gripPressed = true;
         }
 #endif
@@ -703,7 +791,10 @@ public class CorrectionStrengthAnalyzer : MonoBehaviour
         {
             var cam = Camera.main;
             if (cam != null)
+            {
                 transform.position = cam.transform.position + cam.transform.forward * 0.8f;
+                transform.rotation = Quaternion.LookRotation(cam.transform.forward);
+            }
         }
     }
 
